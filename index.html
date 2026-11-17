@@ -718,16 +718,16 @@ async function deleteCampaign(id){
 async function addCreative(campaignId, platform){
   const mode = state.creativeMode || "file";
   const description = val("creative-desc").trim();
+  const link = val("creative-link").trim();
+  const f = file0("creative-file");
+  if (mode === "link" && !link){ setSheetMsg("Pegá un link.", true); return; }
+  if (mode === "file" && !f){ setSheetMsg("Elegí una imagen o video.", true); return; }
   setSheetBusy(true);
   try{
     let media_url, media_path = null, media_type;
     if (mode === "link"){
-      const link = val("creative-link").trim();
-      if (!link){ setSheetMsg("Pegá un link.", true); setSheetBusy(false); return; }
       media_url = link; media_type = "link";
     } else {
-      const f = file0("creative-file");
-      if (!f){ setSheetMsg("Elegí una imagen o video.", true); setSheetBusy(false); return; }
       const up = await uploadMedia(`ad-creatives/${state.clientId}/${campaignId}/${Date.now()}-${safeFileName(f.name)}`, f);
       media_url = up.url; media_path = up.path; media_type = f.type || null;
     }
