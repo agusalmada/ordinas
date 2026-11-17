@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calendario de Contenido — growth.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff; --surface:#ffffff; --surface-2:#f7f7f2; --surface-3:#eeeee6;
+  --line:#e2e2d8; --fg:#1d1f14; --fg-dim:#5c5f4f; --fg-faint:#93967f;
+  --accent:#ddf26a; --accent-ink:#1d1f14; --accent-strong:#59680f; --accent-soft:#eef7cf;
+  --ok:#2f7d3c; --ok-soft:#e3f3e3; --warn:#9a6b11; --warn-soft:#fbedcf;
+  --bad:#b23b3b; --bad-soft:#fae3e3; --radius:18px; --radius-sm:12px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'Outfit',system-ui,sans-serif;min-height:100%;}
+button{font-family:inherit;}
+a{color:var(--accent-strong);}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px;}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.95);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);}
+.topbar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:14px;}
+.brand{font-weight:800;font-size:18px;}
+.brand .dot{color:var(--accent-strong);}
+.subtitle{font-size:12px;color:var(--fg-faint);}
+.spacer{flex:1;}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:12px 0;}
+.tab-btn{flex-shrink:0;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:500;border:1px solid var(--line);background:transparent;color:var(--fg-dim);cursor:pointer;white-space:nowrap;}
+.tab-btn.active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);}
+.content{padding:20px 16px 60px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:var(--radius-sm);padding:9px 14px;font-size:14px;font-weight:500;border:none;cursor:pointer;background:var(--surface-3);color:var(--fg);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-accent{background:var(--accent);color:var(--accent-ink);}
+.btn-ghost{background:transparent;color:var(--fg-dim);}
+.btn-danger{background:transparent;color:var(--bad);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-block{width:100%;}
+.select,.input,.textarea{width:100%;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--surface-2);padding:9px 12px;font-size:14px;font-family:inherit;color:var(--fg);outline:none;}
+.textarea{resize:vertical;}
+.field{display:block;margin-bottom:12px;}
+.field-label{font-size:12px;font-weight:500;color:var(--fg-dim);margin-bottom:4px;}
+.badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:500;}
+.b-borrador{background:var(--surface-3);color:var(--fg-dim);}
+.b-pendiente{background:var(--warn-soft);color:var(--warn);}
+.b-aprobado{background:var(--ok-soft);color:var(--ok);}
+.b-cambios{background:var(--bad-soft);color:var(--bad);}
+.msg{font-size:12px;margin-bottom:8px;}
+.msg-err{color:var(--bad);}
+.msg-ok{color:var(--ok);}
+.card{border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px;}
+.overlay{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;}
+@media(min-width:640px){.overlay{align-items:center;}}
+.sheet{width:100%;max-width:420px;max-height:92vh;overflow-y:auto;background:var(--surface);border-radius:18px 18px 0 0;padding:20px;}
+@media(min-width:640px){.sheet{border-radius:18px;}}
+.sheet.wide{max-width:560px;}
+.sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
+.sheet-title{font-size:18px;font-weight:600;}
+.x-btn{flex-shrink:0;width:32px;height:32px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg-dim);cursor:pointer;font-size:16px;}
+.center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;}
+.login-card{width:100%;max-width:380px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:20px;}
+.seg{display:flex;border-radius:var(--radius-sm);background:var(--surface-3);padding:4px;margin-bottom:16px;font-size:14px;font-weight:500;}
+.seg-btn{flex:1;border:none;background:transparent;border-radius:8px;padding:7px;color:var(--fg-dim);cursor:pointer;}
+.seg-btn.active{background:var(--accent);color:var(--accent-ink);}
+.month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.wd{font-size:10px;text-align:center;color:var(--fg-faint);padding-bottom:4px;}
+.day-cell{aspect-ratio:1;border-radius:10px;border:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:3px;cursor:pointer;background:var(--surface-2);font-size:13px;padding:5px;text-align:left;overflow:hidden;}
+.day-cell.today{border-color:var(--accent-strong);}
+.day-cell.empty{visibility:hidden;}
+.day-num{font-size:11.5px;font-weight:600;color:var(--fg-dim);}
+.day-cell.today .day-num{color:var(--accent-strong);}
+.day-chips{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.chip-dot{display:block;font-size:9.5px;border-radius:5px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.chip-idea{background:var(--accent-soft);color:var(--accent-strong);}
+.chip-event{background:var(--warn-soft);color:var(--warn);}
+.chip-more{font-size:9.5px;color:var(--fg-faint);}
+.dots{display:flex;gap:2px;}
+.dot{width:5px;height:5px;border-radius:999px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
+.grid-slot{position:relative;aspect-ratio:1;background:var(--surface-3);overflow:hidden;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10px;color:var(--fg-faint);padding:4px;cursor:pointer;border:none;}
+.grid-slot img{width:100%;height:100%;object-fit:cover;}
+.hl-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;}
+.hl-item{display:flex;flex-direction:column;align-items:center;gap:4px;width:64px;flex-shrink:0;cursor:pointer;background:none;border:none;}
+.hl-circle{width:58px;height:58px;border-radius:999px;border:1px solid var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.hl-circle img{width:100%;height:100%;object-fit:cover;}
+.hl-label{font-size:10px;color:var(--fg-dim);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.profile-row{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+.avatar{width:64px;height:64px;border-radius:999px;overflow:hidden;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;flex-shrink:0;}
+.avatar img{width:100%;height:100%;object-fit:cover;}
+.trash-row,.log-row{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;}
+.story-progress{display:flex;gap:3px;margin-bottom:10px;}
+.story-progress span{flex:1;height:3px;border-radius:2px;background:var(--line);}
+.story-progress span.on{background:var(--accent-strong);}
+.story-img-wrap{position:relative;border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-3);margin-bottom:14px;max-height:60vh;display:flex;align-items:center;justify-content:center;}
+.story-img-wrap img{max-width:100%;max-height:60vh;object-fit:contain;}
+.story-tap{position:absolute;top:0;bottom:0;width:50%;background:transparent;border:none;cursor:pointer;}
+.loading-text{color:var(--fg-faint);font-size:14px;text-align:center;padding:60px 0;}
+.list-item{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;}
+.list-item .grow{flex:1;min-width:0;}
+.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.row-gap{display:flex;gap:8px;flex-wrap:wrap;}
+.creative-card{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;}
+.creative-card img,.creative-card video{width:100%;height:110px;object-fit:cover;background:#000;}
+.comment{border-top:1px solid var(--line);padding-top:8px;margin-top:8px;font-size:13px;}
+.comment b{font-size:12px;}
+.comment .when{font-size:10px;color:var(--fg-faint);}
+.file-label{font-size:12px;color:var(--accent-strong);cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+"use strict";
+
+/* ===================== CONFIG ===================== */
+const SUPABASE_CONFIG = {
+  url: "https://vjanklrivsiqingaddbd.supabase.co",
+  anonKey: "sb_publishable_WMDsRd3kqmZRiE-kjqx6PQ_MFPCR8hs",
+};
+const sb = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+
+/* ===================== CONSTANTS ===================== */
+const MONTHS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const WEEKDAYS_SHORT = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const EVENT_TYPES = ["Evento","Curso","Producción"];
+const FORMATS = ["Reel","Post","Carrusel","Story"];
+const STATUS_LABEL = {borrador:"Borrador",pendiente:"Pendiente",aprobado:"Aprobado",cambios:"Pide cambios"};
+const STATUS_CLASS = {borrador:"b-borrador",pendiente:"b-pendiente",aprobado:"b-aprobado",cambios:"b-cambios"};
+const BRAND_CATEGORIES = ["Plan de marketing","Brief","Logos","Manual de marca","Stock (imágenes y videos)"];
+const META_CAMPAIGN_TYPES = ["Mensajes","Interacción"];
+const GOOGLE_CAMPAIGN_TYPES = ["Search","Performance Max"];
+const ACTION_LABEL = {create:"creó",update:"actualizó",delete:"eliminó",restore:"restauró",purge:"eliminó para siempre"};
+const TRASH_TABLES = [
+  {table:"calendar_items", entityType:"Idea / evento", storageCol:null},
+  {table:"grid_items", entityType:"Publicación de Instagram", storageCol:"image_path"},
+  {table:"highlights", entityType:"Destacada", storageCol:"image_path"},
+  {table:"highlight_stories", entityType:"Historia de destacada", storageCol:"image_path"},
+  {table:"brand_files", entityType:"Archivo de marca", storageCol:"path"},
+  {table:"ad_campaigns", entityType:"Campaña", storageCol:null},
+  {table:"ad_creatives", entityType:"Pieza publicitaria", storageCol:"media_path"},
+];
+
+/* ===================== HELPERS ===================== */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function monthKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+function dateKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function fmtWhen(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+function safeFileName(name){ return name.replace(/[^a-zA-Z0-9._-]+/g,"-").slice(-80); }
+function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function daysInMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); }
+function mondayIndex(jsDay){ return (jsDay+6)%7; }
+function qs(id){ return document.getElementById(id); }
+function val(id){ const el=qs(id); return el ? el.value : ""; }
+function checked(id){ const el=qs(id); return el ? el.checked : false; }
+function file0(id){ const el=qs(id); return el && el.files && el.files[0] ? el.files[0] : null; }
+
+/* ===================== STATE ===================== */
+const state = {
+  profile: null,
+  identityRole: "agency",
+  loading: true,
+  clients: [],
+  clientId: null,
+  tab: "cal",
+  month: startOfMonth(new Date()),
+  calendarItems: [],
+  comments: {},
+  gridItems: [],
+  highlights: [],
+  highlightStories: [],
+  brandFiles: [],
+  adCampaigns: [],
+  adCreatives: [],
+  adsPlatform: "meta",
+  trash: [],
+  activityLog: [],
+  historyTab: "trash",
+  sheet: null,
+  sheetMsg: "",
+  sheetErr: false,
+  sheetBusy: false,
+};
+const channels = {};
+function removeChannel(key){ if(channels[key]){ sb.removeChannel(channels[key]); delete channels[key]; } }
+function removeTabChannels(){ ["cal","ig","igg","brand","ads"].forEach(removeChannel); }
+
+/* ===================== DATA HELPERS (shared) ===================== */
+async function logActivity(opts){
+  await sb.from("activity_log").insert({
+    client_id: opts.clientId, action: opts.action, entity_type: opts.entityType,
+    label: opts.label||"", by_name: opts.byName, collection: opts.collection||null, doc_id: opts.docId||null,
+  });
+}
+async function trashRow(table, id, byName, opts){
+  await sb.from(table).update({deleted_at:new Date().toISOString(), deleted_by:byName}).eq("id", id);
+  await logActivity({clientId:opts.clientId, action:"delete", entityType:opts.entityType, label:opts.label, byName, collection:table, docId:id});
+}
+async function restoreRow(table, id, byName, opts){
+  await sb.from(table).update({deleted_at:null, deleted_by:null}).eq("id", id);
+  await logActivity({clientId:opts.clientId, action:"restore", entityType:opts.entityType, label:opts.label, byName, collection:table, docId:id});
+}
+async function purgeRow(table, id, byName, opts){
+  if (opts.storagePath) await sb.storage.from("media").remove([opts.storagePath]);
+  await sb.from(table).delete().eq("id", id);
+  await logActivity({clientId:opts.clientId, action:"purge", entityType:opts.entityType, label:opts.label, byName, collection:table, docId:id});
+}
+async function setApprovalStatus(table, id, status){
+  const {error} = await sb.from(table).update({status}).eq("id", id);
+  if (error) throw error;
+}
+async function uploadMedia(path, file){
+  const {error} = await sb.storage.from("media").upload(path, file, {upsert:true, contentType:file.type||undefined});
+  if (error) throw error;
+  const {data} = sb.storage.from("media").getPublicUrl(path);
+  return {url:data.publicUrl, path};
+}
+function isAgency(){ return state.profile && state.profile.role === "agency"; }
+function viewerName(){ return (state.profile && state.profile.name) || (isAgency()?"Agencia":"Cliente"); }
+function currentClient(){ return state.clients.find(c => c.id === state.clientId) || null; }
+
+/* ===================== RENDER ROOT ===================== */
+function render(){
+  const app = qs("app");
+  let html = "";
+  if (state.loading){
+    html = `<div class="center-screen"><div class="loading-text">Cargando…</div></div>`;
+  } else if (!state.profile){
+    html = renderIdentity();
+  } else {
+    html = renderShell();
+  }
+  app.innerHTML = html + (state.sheet ? renderSheetOverlay() : "");
+  attachDynamicListeners();
+}
+
+/* ===================== IDENTITY (sin login: nombre + rol, guardado en este navegador) ===================== */
+const PROFILE_KEY = "calendario_profile_v1";
+function loadProfileFromStorage(){
+  try{ const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
+function saveProfileToStorage(p){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }catch(e){} }
+function clearProfileStorage(){ try{ localStorage.removeItem(PROFILE_KEY); }catch(e){} }
+
+async function init(){
+  state.loading = true; render();
+  await loadClients();
+  subscribeClients();
+  const p = loadProfileFromStorage();
+  if (p && p.name && p.role && (p.role==="agency" || (p.role==="client" && p.clientId))){
+    state.profile = p;
+    state.clientId = p.role === "client" ? p.clientId : (state.clients[0] ? state.clients[0].id : null);
+  }
+  state.loading = false;
+  if (state.clientId) await loadTabData();
+  render();
+}
+function identitySubmit(){
+  const name = val("id-name").trim();
+  const role = state.identityRole || "agency";
+  if (!name){ setSheetMsg("Poné tu nombre.", true); return; }
+  let clientId = null;
+  if (role === "client"){
+    clientId = val("id-client");
+    if (!clientId){ setSheetMsg("Elegí tu empresa.", true); return; }
+  }
+  const profile = {name, role, clientId};
+  saveProfileToStorage(profile);
+  state.profile = profile;
+  state.clientId = role === "client" ? clientId : (state.clients[0] ? state.clients[0].id : null);
+  state.sheetMsg = "";
+  loadTabData().then(render);
+  render();
+}
+async function switchUser(){
+  clearProfileStorage();
+  state.profile = null;
+  state.clientId = null;
+  removeTabChannels();
+  render();
+}
+
+/* ===================== CLIENTS ===================== */
+async function loadClients(){
+  const {data} = await sb.from("clients").select("*").order("name");
+  state.clients = data || [];
+  render();
+}
+function subscribeClients(){
+  removeChannel("clients");
+  channels.clients = sb.channel("clients-list").on("postgres_changes", {event:"*", schema:"public", table:"clients"}, async()=>{ await loadClients(); }).subscribe();
+}
+async function setClient(id){
+  state.clientId = id;
+  await loadTabData();
+  render();
+}
+async function setTab(tab){
+  state.tab = tab;
+  await loadTabData();
+  render();
+}
+async function changeMonth(delta){
+  state.month = new Date(state.month.getFullYear(), state.month.getMonth()+delta, 1);
+  await loadTabData();
+  render();
+}
+async function loadTabData(){
+  if (!state.clientId) return;
+  removeTabChannels();
+  if (state.tab === "cal") await loadCalendar();
+  else if (state.tab === "ig") { await loadHighlights(); await loadGrid(); }
+  else if (state.tab === "brand") await loadBrand();
+  else if (state.tab === "ads") await loadAds();
+}
+
+/* ===================== CALENDAR ===================== */
+async function loadCalendar(){
+  const {data:items} = await sb.from("calendar_items").select("*").eq("client_id", state.clientId).is("deleted_at", null).order("date");
+  state.calendarItems = items || [];
+  const ids = state.calendarItems.map(i=>i.id);
+  let comments = [];
+  if (ids.length){ const {data} = await sb.from("comments").select("*").in("item_id", ids).order("created_at"); comments = data||[]; }
+  const map = {}; comments.forEach(c => { (map[c.item_id] ||= []).push(c); });
+  state.comments = map;
+  removeChannel("cal");
+  channels.cal = sb.channel("cal-"+state.clientId)
+    .on("postgres_changes", {event:"*", schema:"public", table:"calendar_items", filter:`client_id=eq.${state.clientId}`}, async()=>{ await loadCalendar(); render(); })
+    .on("postgres_changes", {event:"*", schema:"public", table:"comments", filter:`client_id=eq.${state.clientId}`}, async()=>{ await loadCalendar(); render(); })
+    .subscribe();
+}
+function renderCalendarTab(){
+  const y = state.month.getFullYear(), m = state.month.getMonth();
+  const lead = mondayIndex(startOfMonth(state.month).getDay());
+  const total = daysInMonth(state.month);
+  const todayKey = dateKey(new Date());
+  let cells = "";
+  for (let i=0;i<lead;i++) cells += `<div class="day-cell empty"></div>`;
+  for (let d=1; d<=total; d++){
+    const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const items = state.calendarItems.filter(it => it.date === key);
+    const shown = items.slice(0,2);
+    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':'chip-idea'}">${esc(it.title||(it.kind==='event'?'Evento':'Idea'))}</span>`).join("");
+    if (items.length > 2) chipsHtml += `<span class="chip-more">+${items.length-2} más</span>`;
+    cells += `<button class="day-cell${key===todayKey?' today':''}" data-action="open-day" data-date="${key}"><span class="day-num">${d}</span><span class="day-chips">${chipsHtml}</span></button>`;
+  }
+  return `
+    <div class="topbar-row" style="padding-top:0;margin-bottom:10px;">
+      <button class="btn btn-ghost btn-sm" data-action="month-prev">‹</button>
+      <div style="flex:1;text-align:center;font-weight:600;font-size:14px;text-transform:capitalize;">${MONTHS[m]} ${y}</div>
+      <button class="btn btn-ghost btn-sm" data-action="month-next">›</button>
+    </div>
+    <div class="month-grid" style="margin-bottom:6px;">${WEEKDAYS_SHORT.map(w=>`<div class="wd">${w}</div>`).join("")}</div>
+    <div class="month-grid">${cells}</div>
+  `;
+}
+function dayItemsHTML(date){
+  const items = state.calendarItems.filter(it => it.date === date);
+  if (!items.length) return `<div class="msg">Todavía no hay nada cargado este día.</div>`;
+  return items.map(it => itemCardHTML(it)).join("");
+}
+function itemCardHTML(it){
+  if (state.sheet && state.sheet.type === "day" && state.sheet.editingId === it.id) return itemEditFormHTML(it);
+  const cs = state.comments[it.id] || [];
+  return `
+  <div class="card">
+    <div class="row-gap" style="justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+      <div>
+        <div style="font-weight:600;font-size:14px;">${esc(it.title)}</div>
+        <div style="font-size:12px;color:var(--fg-faint);">${it.kind==="event"?"Fecha especial":"Idea de contenido"}${it.format?" · "+esc(it.format):""}</div>
+      </div>
+      <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
+    </div>
+    ${it.description ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.description)}</div>` : ""}
+    <div class="row-gap" style="margin-bottom:6px;">
+      <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
+      <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
+      ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
+      <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
+    </div>
+    ${cs.map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("")}
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <input class="input" style="flex:1;" placeholder="Escribir un comentario…" id="comment-input-${it.id}" />
+      <button class="btn btn-accent btn-sm" data-action="item-comment" data-id="${it.id}">Enviar</button>
+    </div>
+  </div>`;
+}
+function itemEditFormHTML(it){
+  const opts = it.kind === "event" ? EVENT_TYPES : FORMATS;
+  return `
+  <div class="card">
+    <div class="field"><input class="input" id="edit-item-title-${it.id}" value="${esc(it.title)}" placeholder="Título"></div>
+    <div class="field"><select class="select" id="edit-item-format-${it.id}">${opts.map(f=>`<option ${it.format===f?"selected":""}>${f}</option>`).join("")}</select></div>
+    <div class="field"><textarea class="textarea" id="edit-item-desc-${it.id}" rows="2">${esc(it.description||"")}</textarea></div>
+    ${sheetMsgHTML()}
+    <div class="row-gap">
+      <button class="btn btn-accent" data-action="item-edit-save" data-id="${it.id}">Guardar</button>
+      <button class="btn btn-ghost" data-action="item-edit-cancel">Cancelar</button>
+    </div>
+  </div>`;
+}
+async function itemEditSave(id){
+  const title = val("edit-item-title-"+id).trim();
+  const format = val("edit-item-format-"+id);
+  const description = val("edit-item-desc-"+id).trim();
+  if (!title){ setSheetMsg("Poné un título.", true); return; }
+  const it = state.calendarItems.find(i=>i.id===id);
+  const {error} = await sb.from("calendar_items").update({title, format, description}).eq("id", id);
+  if (error){ setSheetMsg("No se pudo guardar: "+error.message, true); return; }
+  await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
+  state.sheet.editingId = null;
+  render();
+}
+async function openDaySheet(date){
+  state.sheet = {type:"day", date, newKind:"idea"};
+  state.sheetMsg=""; state.sheetErr=false;
+  render();
+}
+async function submitNewItem(date){
+  const kind = val("new-item-kind") || "idea";
+  const title = val("new-item-title").trim();
+  const format = val("new-item-format");
+  const description = val("new-item-desc").trim();
+  if (!title){ setSheetMsg("Poné un título.", true); return; }
+  const {error} = await sb.from("calendar_items").insert({client_id: state.clientId, date, kind, title, format, description, status:"borrador"});
+  if (error){ setSheetMsg("No se pudo guardar: "+error.message, true); return; }
+  await logActivity({clientId:state.clientId, action:"create", entityType: kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
+  qs("new-item-title").value=""; qs("new-item-desc").value="";
+  setSheetMsg("Agregado.", false);
+}
+async function itemStatusChange(id, status){
+  try {
+    const it = state.calendarItems.find(i=>i.id===id);
+    await setApprovalStatus("calendar_items", id, status);
+    if (it) await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it.title} → ${STATUS_LABEL[status]}`, byName:viewerName()});
+  } catch(e){ alert("No se pudo guardar. Puede que tu cuenta no tenga permiso para esta acción."); }
+}
+async function itemAddComment(id){
+  const input = qs("comment-input-"+id);
+  const text = input ? input.value.trim() : "";
+  if (!text) return;
+  const {error} = await sb.from("comments").insert({item_id:id, client_id:state.clientId, author_id: null, author_name: viewerName(), text});
+  if (!error && input) input.value = "";
+}
+async function itemDelete(id){
+  const it = state.calendarItems.find(i=>i.id===id);
+  if (!it) return;
+  if (!confirm("¿Eliminar? Se puede recuperar desde el historial.")) return;
+  await trashRow("calendar_items", id, viewerName(), {clientId:state.clientId, entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label: it.title});
+}
+
+/* ===================== INSTAGRAM ===================== */
+async function loadHighlights(){
+  const [{data:h},{data:s}] = await Promise.all([
+    sb.from("highlights").select("*").eq("client_id", state.clientId).is("deleted_at", null).order("created_at"),
+    sb.from("highlight_stories").select("*").eq("client_id", state.clientId).is("deleted_at", null),
+  ]);
+  state.highlights = h||[]; state.highlightStories = s||[];
+  removeChannel("ig");
+  channels.ig = sb.channel("ig-"+state.clientId)
+    .on("postgres_changes",{event:"*",schema:"public",table:"highlights",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadHighlights(); render();})
+    .on("postgres_changes",{event:"*",schema:"public",table:"highlight_stories",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadHighlights(); render();})
+    .subscribe();
+}
+async function loadGrid(){
+  const mk = monthKey(state.month);
+  const {data} = await sb.from("grid_items").select("*").eq("client_id", state.clientId).eq("month_key", mk).is("deleted_at", null);
+  state.gridItems = data||[];
+  removeChannel("igg");
+  channels.igg = sb.channel("igg-"+state.clientId+"-"+mk)
+    .on("postgres_changes",{event:"*",schema:"public",table:"grid_items",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadGrid(); render();})
+    .subscribe();
+}
+function renderInstagramTab(){
+  const c = currentClient();
+  const hls = state.highlights;
+  const slots = [];
+  for (let p=1;p<=12;p++){
+    const g = state.gridItems.find(x=>x.position===p);
+    slots.push(`<button class="grid-slot" data-action="${g&&g.image_url?'grid-view':'grid-edit'}" data-pos="${p}">
+      ${g&&g.image_url ? `<img src="${esc(g.image_url)}">` : (isAgency()?"+ Agregar foto":"Sin contenido todavía")}
+    </button>`);
+  }
+  return `
+  <div class="profile-row">
+    <button class="avatar" data-action="${isAgency()?'edit-profile':''}">${c&&c.avatar_url?`<img src="${esc(c.avatar_url)}">`:(c?esc((c.name||"?").charAt(0).toUpperCase()):"?")}</button>
+    <div style="flex:1;min-width:0;">
+      <div style="font-weight:600;" class="truncate">@${esc(c&&c.handle||"usuario")}</div>
+      <div style="font-size:13px;color:var(--fg-dim);" class="truncate">${esc(c&&c.name||"")}</div>
+      <div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;">${esc(c&&c.bio||"")}</div>
+    </div>
+    ${isAgency()?`<button class="btn btn-ghost btn-sm" data-action="edit-profile">Editar</button>`:""}
+  </div>
+  <div class="hl-row">
+    ${hls.map(h=>`<button class="hl-item" data-action="view-story" data-hid="${h.id}"><span class="hl-circle">${h.image_url?`<img src="${esc(h.image_url)}">`:"✦"}</span><span class="hl-label">${esc(h.label)}</span></button>`).join("")}
+    ${isAgency()?`<button class="hl-item" data-action="highlight-new"><span class="hl-circle" style="border:1px dashed var(--accent-strong);color:var(--accent-strong);">+</span><span class="hl-label">Nueva</span></button>`:""}
+  </div>
+  <div class="topbar-row" style="padding-top:12px;margin-bottom:6px;">
+    <button class="btn btn-ghost btn-sm" data-action="month-prev">‹</button>
+    <div style="flex:1;text-align:center;font-weight:600;font-size:14px;text-transform:capitalize;">${MONTHS[state.month.getMonth()]} ${state.month.getFullYear()}</div>
+    <button class="btn btn-ghost btn-sm" data-action="month-next">›</button>
+  </div>
+  ${!isAgency()?`<div style="font-size:12px;color:var(--fg-faint);margin-bottom:8px;">Solo la agencia puede cargar fotos.</div>`:""}
+  <div class="grid3">${slots.join("")}</div>
+  `;
+}
+async function saveClientProfile(){
+  const name = val("profile-name").trim();
+  const handle = val("profile-handle").trim().replace(/^@/,"");
+  const bio = val("profile-bio");
+  const f = file0("profile-avatar");
+  setSheetBusy(true);
+  try{
+    const patch = {name, handle, bio};
+    if (f){ const {url,path} = await uploadMedia(`avatars/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.avatar_url=url; patch.avatar_path=path; }
+    const {error} = await sb.from("clients").update(patch).eq("id", state.clientId);
+    if (error) throw error;
+    closeSheet();
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
+}
+async function saveHighlight(existingId){
+  const label = val("hl-label").trim();
+  const f = file0("hl-image");
+  if (!label){ setSheetMsg("Poné un nombre.", true); return; }
+  setSheetBusy(true);
+  try{
+    const patch = {client_id: state.clientId, label, status: "borrador"};
+    if (f){ const {url,path} = await uploadMedia(`highlights/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.image_url=url; patch.image_path=path; }
+    if (existingId){ const {error} = await sb.from("highlights").update(patch).eq("id", existingId); if (error) throw error; }
+    else { const {error} = await sb.from("highlights").insert(patch); if (error) throw error; }
+    await logActivity({clientId:state.clientId, action: existingId?"update":"create", entityType:"Destacada", label, byName:viewerName()});
+    closeSheet();
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
+}
+async function deleteHighlight(id){
+  const h = state.highlights.find(x=>x.id===id);
+  if (!confirm("¿Eliminar esta destacada?")) return;
+  await trashRow("highlights", id, viewerName(), {clientId:state.clientId, entityType:"Destacada", label:h?h.label:""});
+  closeSheet();
+}
+async function addStory(highlightId){
+  const el = qs("story-file");
+  const files = el && el.files ? Array.from(el.files) : [];
+  if (!files.length) return;
+  setSheetBusy(true);
+  try{
+    let nextOrder = state.highlightStories.filter(s=>s.highlight_id===highlightId && !s.deleted_at).length;
+    for (const f of files){
+      const {url,path} = await uploadMedia(`highlight-stories/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f);
+      const {error} = await sb.from("highlight_stories").insert({highlight_id:highlightId, client_id:state.clientId, order:nextOrder, image_url:url, image_path:path});
+      if (error) throw error;
+      nextOrder++;
+    }
+    const h = state.highlights.find(x=>x.id===highlightId);
+    await logActivity({clientId:state.clientId, action:"create", entityType:"Historia de destacada", label: (h?h.label:"")+(files.length>1?` (${files.length} historias)`:""), byName:viewerName()});
+    if (el) el.value = "";
+    render();
+  }catch(e){ setSheetMsg("No se pudo subir: "+e.message, true); }
+  finally{ setSheetBusy(false); }
+}
+async function deleteStory(storyId, highlightId){
+  const h = state.highlights.find(x=>x.id===highlightId);
+  await trashRow("highlight_stories", storyId, viewerName(), {clientId:state.clientId, entityType:"Historia de destacada", label:"Historia de "+(h?h.label:"destacada")});
+}
+async function gridStatusChange(pos, status){
+  const g = state.gridItems.find(x=>x.position===pos);
+  if (!g) return;
+  try{
+    await setApprovalStatus("grid_items", g.id, status);
+    await logActivity({clientId:state.clientId, action:"update", entityType:"Publicación de Instagram", label:`Publicación ${pos} → ${STATUS_LABEL[status]}`, byName:viewerName()});
+    render();
+  }catch(e){ alert("No se pudo guardar. Puede que tu cuenta no tenga permiso para esta acción."); }
+}
+async function saveGridItem(pos){
+  const caption = val("grid-caption").trim();
+  const isReel = checked("grid-isreel");
+  const reelLink = val("grid-reellink").trim();
+  const f = file0("grid-image");
+  const existing = state.gridItems.find(x=>x.position===pos);
+  setSheetBusy(true);
+  try{
+    const patch = {client_id:state.clientId, month_key: monthKey(state.month), position:pos, caption, is_reel:isReel, reel_link: isReel?reelLink:"", status: existing?existing.status:"borrador", updated_at: new Date().toISOString()};
+    if (f){ const {url,path} = await uploadMedia(`grid/${state.clientId}/${monthKey(state.month)}-${pos}-${Date.now()}-${safeFileName(f.name)}`, f); patch.image_url=url; patch.image_path=path; }
+    if (existing){ const {error} = await sb.from("grid_items").update(patch).eq("id", existing.id); if (error) throw error; }
+    else { const {error} = await sb.from("grid_items").insert(patch); if (error) throw error; }
+    await logActivity({clientId:state.clientId, action: existing?"update":"create", entityType:"Publicación de Instagram", label:`Publicación ${pos}`, byName:"Agencia"});
+    closeSheet();
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
+}
+async function deleteGridItem(pos){
+  const g = state.gridItems.find(x=>x.position===pos);
+  if (!g) return;
+  if (!confirm("¿Eliminar esta publicación?")) return;
+  await trashRow("grid_items", g.id, viewerName(), {clientId:state.clientId, entityType:"Publicación de Instagram", label:`Publicación ${pos}`});
+  closeSheet();
+}
+
+/* ===================== BRAND ===================== */
+async function loadBrand(){
+  const {data} = await sb.from("brand_files").select("*").eq("client_id", state.clientId).is("deleted_at", null).order("created_at", {ascending:false});
+  state.brandFiles = data||[];
+  removeChannel("brand");
+  channels.brand = sb.channel("brand-"+state.clientId)
+    .on("postgres_changes",{event:"*",schema:"public",table:"brand_files",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadBrand(); render();})
+    .subscribe();
+}
+function fmtSize(bytes){
+  if (!bytes) return "";
+  if (bytes < 1024*1024) return Math.round(bytes/1024)+" KB";
+  return (bytes/(1024*1024)).toFixed(1)+" MB";
+}
+function renderBrandTab(){
+  return `
+  <div style="font-size:13px;color:var(--fg-dim);margin-bottom:16px;">
+    Acá vive todo el material de marca del cliente. ${isAgency()?"La agencia y el cliente pueden subir archivos.":"Podés subir archivos, pero no podés borrar los que ya están cargados."}
+  </div>
+  ${BRAND_CATEGORIES.map(cat=>{
+    const files = state.brandFiles.filter(f=>f.category===cat);
+    return `<div style="margin-bottom:20px;">
+      <div class="topbar-row" style="padding-top:0;margin-bottom:6px;">
+        <div style="font-weight:600;font-size:14px;flex:1;">${esc(cat)}</div>
+        <label class="file-label">+ Subir archivo<input type="file" style="display:none;" data-action="brand-upload" data-cat="${esc(cat)}"></label>
+      </div>
+      ${files.length===0 ? `<div style="font-size:12px;color:var(--fg-faint);border:1px dashed var(--line);border-radius:var(--radius-sm);padding:10px;">Sin archivos todavía.</div>` :
+        files.map(f=>`<div class="list-item">
+          <a class="grow truncate" href="${esc(f.url||'#')}" target="_blank" style="font-size:13px;">${esc(f.label||f.file_name||"archivo")}</a>
+          <span style="font-size:11px;color:var(--fg-faint);">${fmtSize(f.size_bytes)}</span>
+          ${isAgency()?`<button class="btn btn-danger btn-sm" data-action="brand-delete" data-id="${f.id}">Eliminar</button>`:""}
+        </div>`).join("")}
+    </div>`;
+  }).join("")}
+  `;
+}
+async function brandUpload(category, file){
+  try{
+    const path = `brand-files/${state.clientId}/${category}/${Date.now()}-${safeFileName(file.name)}`;
+    const {url} = await uploadMedia(path, file);
+    const {error} = await sb.from("brand_files").insert({
+      client_id: state.clientId, category, label:file.name, file_name:file.name, url, path,
+      content_type:file.type||null, size_bytes:file.size||null, uploader_id: null,
+    });
+    if (error) throw error;
+    await logActivity({clientId:state.clientId, action:"create", entityType:"Archivo de marca", label:file.name, byName:viewerName()});
+  }catch(e){ alert("No se pudo subir: "+e.message); }
+}
+async function brandDelete(id){
+  const f = state.brandFiles.find(x=>x.id===id);
+  if (!f) return;
+  if (!confirm(`¿Eliminar "${f.label}"? Se puede recuperar desde el historial.`)) return;
+  await trashRow("brand_files", id, viewerName(), {clientId:state.clientId, entityType:"Archivo de marca", label:f.label||""});
+}
+
+/* ===================== ADS ===================== */
+async function loadAds(){
+  const [{data:c},{data:cr}] = await Promise.all([
+    sb.from("ad_campaigns").select("*").eq("client_id", state.clientId).is("deleted_at", null).order("created_at",{ascending:false}),
+    sb.from("ad_creatives").select("*").eq("client_id", state.clientId).is("deleted_at", null),
+  ]);
+  state.adCampaigns = c||[]; state.adCreatives = cr||[];
+  removeChannel("ads");
+  channels.ads = sb.channel("ads-"+state.clientId)
+    .on("postgres_changes",{event:"*",schema:"public",table:"ad_campaigns",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadAds(); render();})
+    .on("postgres_changes",{event:"*",schema:"public",table:"ad_creatives",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadAds(); render();})
+    .subscribe();
+}
+function renderAdsTab(){
+  const list = state.adCampaigns.filter(c=>c.platform===state.adsPlatform);
+  return `
+  ${!isAgency()?`<div style="font-size:13px;color:var(--fg-dim);margin-bottom:12px;">Vista de las campañas publicitarias que gestiona la agencia.</div>`:""}
+  <div class="row-gap" style="margin-bottom:16px;">
+    <button class="btn ${state.adsPlatform==='meta'?'btn-accent':''}" data-action="ads-platform" data-platform="meta">Meta Ads</button>
+    <button class="btn ${state.adsPlatform==='google'?'btn-accent':''}" data-action="ads-platform" data-platform="google">Google Ads</button>
+    ${isAgency()?`<span class="spacer"></span><button class="btn btn-accent" data-action="campaign-new">+ Campaña</button>`:""}
+  </div>
+  ${list.length===0?`<div class="loading-text">Todavía no hay campañas de ${state.adsPlatform==='meta'?'Meta':'Google'}.</div>`:
+    list.map(c=>`<button class="list-item" style="width:100%;text-align:left;background:none;cursor:pointer;" data-action="campaign-view" data-id="${c.id}">
+      <div class="grow">
+        <div style="font-weight:500;font-size:14px;" class="truncate">${esc(c.name||"(sin nombre)")}</div>
+        <div style="font-size:12px;color:var(--fg-faint);">${c.budget?"Presupuesto: "+esc(c.budget)+" · ":""}${esc(c.start_date||"")}${c.end_date?" → "+esc(c.end_date):""}</div>
+      </div>
+      ${c.type?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">${esc(c.type)}</span>`:""}
+    </button>`).join("")}
+  `;
+}
+async function saveCampaign(existingId, platform){
+  const name = val("camp-name").trim();
+  const type = val("camp-type");
+  const budget = val("camp-budget").trim();
+  const start = val("camp-start");
+  const end = val("camp-end");
+  const headlines = val("camp-headlines").split("\n").map(s=>s.trim()).filter(Boolean);
+  const descriptions = val("camp-descs").split("\n").map(s=>s.trim()).filter(Boolean);
+  setSheetBusy(true);
+  try{
+    const patch = {client_id:state.clientId, platform, name, type, budget, start_date:start||null, end_date:end||null, headlines, descriptions};
+    if (existingId){ const {error} = await sb.from("ad_campaigns").update(patch).eq("id", existingId); if (error) throw error; }
+    else { const {error} = await sb.from("ad_campaigns").insert(patch); if (error) throw error; }
+    await logActivity({clientId:state.clientId, action: existingId?"update":"create", entityType:"Campaña", label:name, byName:"Agencia"});
+    closeSheet();
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
+}
+async function deleteCampaign(id){
+  const c = state.adCampaigns.find(x=>x.id===id);
+  if (!confirm("¿Eliminar esta campaña? Se puede recuperar desde el historial.")) return;
+  await trashRow("ad_campaigns", id, "Agencia", {clientId:state.clientId, entityType:"Campaña", label:c?c.name:""});
+  closeSheet();
+}
+async function addCreative(campaignId, platform){
+  const mode = state.creativeMode || "file";
+  const description = val("creative-desc").trim();
+  setSheetBusy(true);
+  try{
+    let media_url, media_path = null, media_type;
+    if (mode === "link"){
+      const link = val("creative-link").trim();
+      if (!link){ setSheetMsg("Pegá un link.", true); setSheetBusy(false); return; }
+      media_url = link; media_type = "link";
+    } else {
+      const f = file0("creative-file");
+      if (!f){ setSheetMsg("Elegí una imagen o video.", true); setSheetBusy(false); return; }
+      const up = await uploadMedia(`ad-creatives/${state.clientId}/${campaignId}/${Date.now()}-${safeFileName(f.name)}`, f);
+      media_url = up.url; media_path = up.path; media_type = f.type || null;
+    }
+    const {error} = await sb.from("ad_creatives").insert({campaign_id:campaignId, client_id:state.clientId, platform, media_url, media_path, media_type, description});
+    if (error) throw error;
+    await logActivity({clientId:state.clientId, action:"create", entityType:"Pieza publicitaria", label:description, byName:"Agencia"});
+    state.creativeMode = "file";
+    closeSheet();
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
+}
+async function deleteCreative(id){
+  const cr = state.adCreatives.find(x=>x.id===id);
+  if (!confirm("¿Eliminar esta pieza?")) return;
+  await trashRow("ad_creatives", id, "Agencia", {clientId:state.clientId, entityType:"Pieza publicitaria", label:cr?cr.description:""});
+}
+
+/* ===================== HISTORY (trash + log), agency only ===================== */
+async function loadHistory(){
+  const results = await Promise.all(TRASH_TABLES.map(async ({table,entityType,storageCol})=>{
+    const {data} = await sb.from(table).select("*").eq("client_id", state.clientId).not("deleted_at","is",null);
+    return (data||[]).map(row=>({
+      table, entityType, id:row.id,
+      label: labelFor(table,row),
+      deleted_at: row.deleted_at, deleted_by: row.deleted_by||null,
+      storagePath: storageCol ? (row[storageCol]||null) : null,
+    }));
+  }));
+  state.trash = results.flat().sort((a,b)=> a.deleted_at < b.deleted_at ? 1 : -1);
+  const {data:log} = await sb.from("activity_log").select("*").eq("client_id", state.clientId).order("ts",{ascending:false}).limit(300);
+  state.activityLog = log||[];
+  render();
+}
+function labelFor(table,row){
+  switch(table){
+    case "calendar_items": return row.title || "(sin título)";
+    case "grid_items": return "Publicación "+row.position;
+    case "highlights": return row.label || "(sin nombre)";
+    case "highlight_stories": return "Historia";
+    case "brand_files": return row.label || row.file_name || "(archivo)";
+    case "ad_campaigns": return row.name || "(sin nombre)";
+    case "ad_creatives": return row.description || "(pieza)";
+    default: return "";
+  }
+}
+function renderHistorySheetBody(){
+  if (state.historyTab === "trash"){
+    if (!state.trash.length) return `<div class="loading-text">La papelera está vacía.</div>`;
+    return state.trash.map(r=>`<div class="trash-row">
+      <div class="grow">
+        <div style="font-weight:500;font-size:14px;" class="truncate">${esc(r.label)}</div>
+        <div style="font-size:11px;color:var(--fg-faint);">${esc(r.entityType)} · eliminado ${fmtWhen(r.deleted_at)}${r.deleted_by?" por "+esc(r.deleted_by):""}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" data-action="trash-restore" data-table="${r.table}" data-id="${r.id}">Restaurar</button>
+      <button class="btn btn-danger btn-sm" data-action="trash-purge" data-table="${r.table}" data-id="${r.id}">Borrar para siempre</button>
+    </div>`).join("");
+  }
+  if (!state.activityLog.length) return `<div class="loading-text">Sin actividad registrada todavía.</div>`;
+  return `<div style="max-height:60vh;overflow-y:auto;">` + state.activityLog.map(e=>`<div class="log-row" style="display:block;">
+    <div style="font-size:13px;"><b>${esc(e.by_name||"Alguien")}</b> ${ACTION_LABEL[e.action]||e.action} ${esc((e.entity_type||"").toLowerCase())}${e.label?` “${esc(e.label)}”`:""}</div>
+    <div style="font-size:11px;color:var(--fg-faint);">${fmtWhen(e.ts)}</div>
+  </div>`).join("") + `</div>`;
+}
+async function trashRestore(table,id){
+  const r = state.trash.find(x=>x.table===table && x.id===id);
+  if (!r) return;
+  await restoreRow(table, id, "Agencia", {clientId:state.clientId, entityType:r.entityType, label:r.label});
+}
+async function trashPurge(table,id){
+  const r = state.trash.find(x=>x.table===table && x.id===id);
+  if (!r) return;
+  if (!confirm(`¿Eliminar "${r.label}" para siempre? No se puede deshacer.`)) return;
+  await purgeRow(table, id, "Agencia", {clientId:state.clientId, entityType:r.entityType, label:r.label, storagePath:r.storagePath});
+}
+
+/* ===================== SHEET SYSTEM ===================== */
+function setSheetMsg(text, isErr){ state.sheetMsg=text; state.sheetErr=!!isErr; render(); }
+function setSheetBusy(b){ state.sheetBusy=b; render(); }
+function openSheet(type, props){ state.sheet = Object.assign({type}, props||{}); state.sheetMsg=""; state.sheetErr=false; state.sheetBusy=false; render(); }
+function closeSheet(){ state.sheet=null; render(); }
+
+function renderSheetOverlay(){
+  const s = state.sheet;
+  let inner = "";
+  let wide = false;
+  switch(s.type){
+    case "day": inner = sheetDay(s); break;
+    case "editProfile": inner = sheetEditProfile(); break;
+    case "highlightEdit": inner = sheetHighlightEdit(s); break;
+    case "storyViewer": inner = sheetStoryViewer(s); wide=false; break;
+    case "gridEdit": inner = sheetGridEdit(s); break;
+    case "gridView": inner = sheetGridView(s); break;
+    case "campaignEdit": inner = sheetCampaignEdit(s); break;
+    case "campaignView": inner = sheetCampaignView(s); wide=true; break;
+    case "creativeAdd": inner = sheetCreativeAdd(s); break;
+    case "history": inner = sheetHistory(); wide=true; break;
+    case "addClient": inner = sheetAddClient(); break;
+  }
+  return `<div class="overlay" data-action="overlay-close"><div class="sheet${wide?' wide':''}" data-stop="1">${inner}</div></div>`;
+}
+function sheetMsgHTML(){ return state.sheetMsg ? `<div class="msg ${state.sheetErr?'msg-err':'msg-ok'}">${esc(state.sheetMsg)}</div>` : ""; }
+function headHTML(title){ return `<div class="sheet-head"><div class="sheet-title">${esc(title)}</div><button class="x-btn" data-action="sheet-close">×</button></div>`; }
+
+function sheetDay(s){
+  return `${headHTML(new Date(s.date+"T00:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"}))}
+  ${dayItemsHTML(s.date)}
+  ${isAgency() ? `
+  <div class="card">
+    <div class="field-label" style="margin-bottom:8px;">Agregar nuevo</div>
+    <div class="seg" style="margin-bottom:10px;">
+      <button class="seg-btn active" id="kind-idea-btn" data-action="new-item-kind" data-kind="idea">Idea de contenido</button>
+      <button class="seg-btn" id="kind-event-btn" data-action="new-item-kind" data-kind="event">Fecha especial</button>
+    </div>
+    <input type="hidden" id="new-item-kind" value="idea">
+    <div class="field"><input class="input" id="new-item-title" placeholder="Título"></div>
+    <div class="field"><select class="select" id="new-item-format">${FORMATS.map(f=>`<option>${f}</option>`).join("")}</select></div>
+    <div class="field"><textarea class="textarea" id="new-item-desc" rows="2" placeholder="Guion, idea, detalle…"></textarea></div>
+    ${sheetMsgHTML()}
+    <button class="btn btn-accent btn-block" data-action="new-item-save" data-date="${s.date}">Agregar</button>
+  </div>` : ""}`;
+}
+function sheetEditProfile(){
+  const c = currentClient();
+  return `${headHTML("Editar perfil")}
+  <div class="field"><div class="field-label">Logo / foto de perfil</div><input type="file" accept="image/*" id="profile-avatar"></div>
+  <div class="field"><div class="field-label">Nombre del cliente</div><input class="input" id="profile-name" value="${esc(c&&c.name||'')}"></div>
+  <div class="field"><div class="field-label">Usuario de Instagram</div><input class="input" id="profile-handle" value="${esc(c&&c.handle||'')}"></div>
+  <div class="field"><div class="field-label">Biografía de Instagram</div><textarea class="textarea" id="profile-bio" rows="3" maxlength="160">${esc(c&&c.bio||'')}</textarea></div>
+  ${sheetMsgHTML()}
+  <button class="btn btn-accent btn-block" data-action="profile-save" ${state.sheetBusy?"disabled":""}>Guardar</button>`;
+}
+function sheetHighlightEdit(s){
+  const h = s.id ? state.highlights.find(x=>x.id===s.id) : null;
+  const stories = h ? state.highlightStories.filter(x=>x.highlight_id===h.id && !x.deleted_at) : [];
+  return `${headHTML(h?"Editar destacada":"Nueva destacada")}
+  <div class="field"><div class="field-label">Portada</div><input type="file" accept="image/*" id="hl-image"></div>
+  <div class="field"><div class="field-label">Nombre</div><input class="input" id="hl-label" maxlength="20" value="${esc(h?h.label:'')}"></div>
+  ${sheetMsgHTML()}
+  ${h ? `<div style="margin-bottom:14px;">
+    <div class="field-label">Historias</div>
+    <div class="row-gap" style="margin-bottom:8px;">
+      ${stories.length===0?`<div style="font-size:12px;color:var(--fg-faint);">Sin historias todavía</div>`:
+        stories.map(st=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">
+          <img src="${esc(st.image_url||'')}" style="width:100%;height:100%;object-fit:cover;">
+          <button data-action="story-delete" data-sid="${st.id}" data-hid="${h.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>
+        </div>`).join("")}
+    </div>
+    <div class="row-gap">
+      <input type="file" accept="image/*" id="story-file" multiple style="flex:1;">
+      <button class="btn btn-sm" data-action="story-add" data-hid="${h.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
+    </div>
+  </div>` : ""}
+  <button class="btn btn-accent btn-block" data-action="highlight-save" data-id="${h?h.id:''}" ${state.sheetBusy?"disabled":""}>Guardar</button>
+  ${h?`<button class="btn btn-danger btn-block" style="margin-top:8px;" data-action="highlight-delete" data-id="${h.id}">Eliminar destacada</button>`:""}`;
+}
+function sheetStoryViewer(s){
+  const h = state.highlights.find(x=>x.id===s.hid);
+  if (!h) return "";
+  const stories = state.highlightStories.filter(x=>x.highlight_id===h.id && !x.deleted_at).sort((a,b)=>a.order-b.order);
+  const idx = Math.max(0, Math.min(s.idx||0, stories.length-1));
+  if (!stories.length){
+    return `${headHTML(h.label)}<div class="loading-text">Todavía no hay historias cargadas acá.</div>
+    ${isAgency()?`<button class="btn btn-accent btn-block" data-action="highlight-edit-open" data-id="${h.id}">Agregar historias</button>`:""}`;
+  }
+  const st = stories[idx];
+  return `${headHTML(h.label)}
+  <div class="story-progress">${stories.map((_,i)=>`<span class="${i<=idx?'on':''}"></span>`).join("")}</div>
+  <div class="story-img-wrap">
+    <img src="${esc(st.image_url||'')}">
+    ${stories.length>1?`<button class="story-tap" style="left:0;" data-action="story-prev" data-hid="${h.id}" data-idx="${idx}"></button><button class="story-tap" style="right:0;" data-action="story-next" data-hid="${h.id}" data-idx="${idx}" data-max="${stories.length-1}"></button>`:""}
+  </div>
+  <div style="margin-bottom:10px;"><span class="badge ${STATUS_CLASS[h.status]}">${STATUS_LABEL[h.status]}</span></div>
+  <div class="row-gap" style="margin-bottom:8px;">
+    <button class="btn" data-action="highlight-status" data-id="${h.id}" data-status="aprobado">✓ Aprobar</button>
+    <button class="btn" data-action="highlight-status" data-id="${h.id}" data-status="cambios">Pedir cambios</button>
+  </div>
+  ${isAgency()?`<div class="row-gap">
+    <button class="btn btn-ghost" data-action="highlight-edit-open" data-id="${h.id}">Editar destacada</button>
+    <button class="btn btn-danger" data-action="story-delete" data-sid="${st.id}" data-hid="${h.id}">Eliminar esta historia</button>
+  </div>`:""}`;
+}
+function sheetGridEdit(s){
+  const g = state.gridItems.find(x=>x.position===s.pos);
+  return `${headHTML("Publicación "+s.pos)}
+  <div class="field"><div class="field-label">Foto o portada del reel</div><input type="file" accept="image/*" id="grid-image"></div>
+  <div class="field"><div class="field-label">Copy / texto del posteo</div><textarea class="textarea" id="grid-caption" rows="3">${esc(g?g.caption:'')}</textarea></div>
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px;"><input type="checkbox" id="grid-isreel" ${g&&g.is_reel?"checked":""}> Es un Reel</label>
+  <div class="field"><div class="field-label">Link del video (si es reel)</div><input class="input" id="grid-reellink" value="${esc(g?g.reel_link||'':'')}" placeholder="https://instagram.com/reel/…"></div>
+  ${sheetMsgHTML()}
+  <button class="btn btn-accent btn-block" data-action="grid-save" data-pos="${s.pos}" ${state.sheetBusy?"disabled":""}>Guardar</button>`;
+}
+function sheetGridView(s){
+  const g = state.gridItems.find(x=>x.position===s.pos);
+  if (!g) return "";
+  return `${headHTML("Publicación "+s.pos)}
+  <div style="border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-3);margin-bottom:12px;display:flex;align-items:center;justify-content:center;max-height:50vh;">
+    <img src="${esc(g.image_url||'')}" style="max-height:50vh;object-fit:contain;">
+  </div>
+  <div class="row-gap" style="margin-bottom:8px;">
+    ${g.is_reel?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">Reel</span>`:""}
+    <span class="badge ${STATUS_CLASS[g.status]}">${STATUS_LABEL[g.status]}</span>
+  </div>
+  <div style="font-size:14px;margin-bottom:8px;white-space:pre-wrap;${g.caption?'':'color:var(--fg-faint);font-style:italic;'}">${esc(g.caption||'Sin copy cargado todavía.')}</div>
+  ${g.is_reel&&g.reel_link?`<a href="${esc(g.reel_link)}" target="_blank" style="display:block;margin-bottom:8px;text-decoration:underline;">${esc(g.reel_link)}</a>`:""}
+  <div class="row-gap" style="margin-bottom:8px;">
+    <button class="btn" data-action="grid-status" data-pos="${s.pos}" data-status="aprobado">✓ Aprobar</button>
+    <button class="btn" data-action="grid-status" data-pos="${s.pos}" data-status="cambios">Pedir cambios</button>
+  </div>
+  ${isAgency()?`<div class="row-gap">
+    <button class="btn" data-action="grid-edit-open" data-pos="${s.pos}">Editar</button>
+    <button class="btn btn-danger" data-action="grid-delete" data-pos="${s.pos}">Eliminar publicación</button>
+  </div>`:""}`;
+}
+function sheetCampaignEdit(s){
+  const c = s.id ? state.adCampaigns.find(x=>x.id===s.id) : null;
+  const types = s.platform==="meta" ? META_CAMPAIGN_TYPES : GOOGLE_CAMPAIGN_TYPES;
+  return `${headHTML((c?"Editar":"Nueva")+" campaña de "+(s.platform==="meta"?"Meta":"Google"))}
+  <div class="field"><div class="field-label">Nombre</div><input class="input" id="camp-name" value="${esc(c?c.name||'':'')}"></div>
+  <div class="field"><div class="field-label">Tipo</div><select class="select" id="camp-type">${types.map(t=>`<option ${c&&c.type===t?"selected":""}>${t}</option>`).join("")}</select></div>
+  <div class="field"><div class="field-label">Presupuesto</div><input class="input" id="camp-budget" value="${esc(c?c.budget||'':'')}" placeholder="$ por día / total"></div>
+  <div class="row-gap">
+    <div class="field" style="flex:1;"><div class="field-label">Desde</div><input class="input" type="date" id="camp-start" value="${c&&c.start_date||''}"></div>
+    <div class="field" style="flex:1;"><div class="field-label">Hasta</div><input class="input" type="date" id="camp-end" value="${c&&c.end_date||''}"></div>
+  </div>
+  ${s.platform==="google"?`
+  <div class="field"><div class="field-label">Títulos (uno por línea)</div><textarea class="textarea" id="camp-headlines" rows="3">${esc((c&&c.headlines||[]).join("\n"))}</textarea></div>
+  <div class="field"><div class="field-label">Descripciones (una por línea)</div><textarea class="textarea" id="camp-descs" rows="3">${esc((c&&c.descriptions||[]).join("\n"))}</textarea></div>`:
+  `<input type="hidden" id="camp-headlines" value=""><input type="hidden" id="camp-descs" value="">`}
+  ${sheetMsgHTML()}
+  <button class="btn btn-accent btn-block" data-action="campaign-save" data-id="${c?c.id:''}" data-platform="${s.platform}" ${state.sheetBusy?"disabled":""}>Guardar</button>
+  ${c?`<button class="btn btn-danger btn-block" style="margin-top:8px;" data-action="campaign-delete" data-id="${c.id}">Eliminar campaña</button>`:""}`;
+}
+function sheetCampaignView(s){
+  const c = state.adCampaigns.find(x=>x.id===s.id);
+  if (!c) return "";
+  const creatives = state.adCreatives.filter(x=>x.campaign_id===c.id);
+  return `${headHTML(c.name||"Campaña")}
+  <div class="row-gap" style="margin-bottom:10px;">
+    <span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">${c.platform==="meta"?"Meta Ads":"Google Ads"}</span>
+    ${c.type?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">${esc(c.type)}</span>`:""}
+  </div>
+  <div style="font-size:14px;color:var(--fg-dim);margin-bottom:4px;">${c.budget?"Presupuesto: "+esc(c.budget):""}</div>
+  <div style="font-size:14px;color:var(--fg-dim);margin-bottom:12px;">${c.start_date?"Desde "+c.start_date:""}${c.end_date?" hasta "+c.end_date:""}</div>
+  ${c.platform==="google"&&c.headlines&&c.headlines.length?`<div style="margin-bottom:10px;"><div class="field-label">Títulos</div><ul style="margin:4px 0;padding-left:18px;font-size:14px;">${c.headlines.map(h=>`<li>${esc(h)}</li>`).join("")}</ul></div>`:""}
+  ${c.platform==="google"&&c.descriptions&&c.descriptions.length?`<div style="margin-bottom:10px;"><div class="field-label">Descripciones</div><ul style="margin:4px 0;padding-left:18px;font-size:14px;">${c.descriptions.map(d=>`<li>${esc(d)}</li>`).join("")}</ul></div>`:""}
+  <div class="topbar-row" style="padding-top:0;margin-bottom:6px;">
+    <div class="field-label" style="flex:1;margin-bottom:0;">Piezas</div>
+    ${isAgency()?`<button class="btn btn-ghost btn-sm" data-action="creative-add-open" data-cid="${c.id}" data-platform="${c.platform}">+ Agregar pieza</button>`:""}
+  </div>
+  ${creatives.length===0?`<div style="font-size:12px;color:var(--fg-faint);margin-bottom:12px;">Sin piezas cargadas todavía.</div>`:
+  `<div class="grid3" style="margin-bottom:12px;">${creatives.map(cr=>`<div class="creative-card">
+    ${cr.media_type==="link"?`<a href="${esc(cr.media_url||'')}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;height:100px;background:var(--surface-2);font-size:12px;text-align:center;padding:8px;word-break:break-all;">🔗 Ver link</a>`
+      :cr.media_type&&cr.media_type.startsWith("video")?`<video src="${esc(cr.media_url||'')}" controls></video>`:`<img src="${esc(cr.media_url||'')}">`}
+    <div style="padding:6px;">
+      <div style="font-size:11px;color:var(--fg-dim);">${esc(cr.description||'')}</div>
+      ${isAgency()?`<button data-action="creative-delete" data-id="${cr.id}" style="border:none;background:none;color:var(--bad);font-size:11px;padding:2px 0;cursor:pointer;">Eliminar</button>`:""}
+    </div>
+  </div>`).join("")}</div>`}
+  ${isAgency()?`<button class="btn btn-ghost btn-block" data-action="campaign-edit-open" data-id="${c.id}" data-platform="${c.platform}">Editar campaña</button>`:""}`;
+}
+function sheetCreativeAdd(s){
+  const mode = state.creativeMode || "file";
+  return `${headHTML("Nueva pieza")}
+  <div class="seg" style="margin-bottom:10px;">
+    <button class="seg-btn${mode==='file'?' active':''}" data-action="creative-mode" data-mode="file">Subir archivo</button>
+    <button class="seg-btn${mode==='link'?' active':''}" data-action="creative-mode" data-mode="link">Pegar link</button>
+  </div>
+  ${mode==="file"
+    ? `<div class="field"><div class="field-label">Imagen o video</div><input type="file" accept="image/*,video/*" id="creative-file"></div>`
+    : `<div class="field"><div class="field-label">Link de Instagram, Drive, etc.</div><input class="input" id="creative-link" placeholder="https://..."></div>`
+  }
+  <div class="field"><div class="field-label">Descripción / copy</div><textarea class="textarea" id="creative-desc" rows="3"></textarea></div>
+  ${sheetMsgHTML()}
+  <button class="btn btn-accent btn-block" data-action="creative-save" data-cid="${s.cid}" data-platform="${s.platform}" ${state.sheetBusy?"disabled":""}>Guardar</button>`;
+}
+function sheetHistory(){
+  return `${headHTML("Historial y papelera")}
+  <div class="row-gap" style="margin-bottom:14px;">
+    <button class="btn ${state.historyTab==='trash'?'btn-accent':''}" data-action="history-tab" data-tab="trash">Papelera ${state.trash.length?`(${state.trash.length})`:""}</button>
+    <button class="btn ${state.historyTab==='log'?'btn-accent':''}" data-action="history-tab" data-tab="log">Actividad</button>
+  </div>
+  ${renderHistorySheetBody()}`;
+}
+function sheetAddClient(){
+  return `${headHTML("Nuevo cliente")}
+  <div class="field"><div class="field-label">Nombre del cliente</div><input class="input" id="newclient-name" placeholder="Ej: AdapHaus"></div>
+  <div class="field"><div class="field-label">Usuario de Instagram</div><input class="input" id="newclient-handle" placeholder="@usuario"></div>
+  ${sheetMsgHTML()}
+  <button class="btn btn-accent btn-block" data-action="addclient-save" ${state.sheetBusy?"disabled":""}>Crear cliente</button>`;
+}
+async function addClientSave(){
+  const name = val("newclient-name").trim();
+  const handle = val("newclient-handle").trim().replace(/^@/,"");
+  if (!name){ setSheetMsg("Poné un nombre.", true); return; }
+  setSheetBusy(true);
+  const {data, error} = await sb.from("clients").insert({name, handle}).select().single();
+  setSheetBusy(false);
+  if (error){ setSheetMsg("No se pudo crear: "+error.message, true); return; }
+  closeSheet();
+  await setClient(data.id);
+}
+
+/* ===================== SHELL / LOGIN / PENDING ===================== */
+function renderShell(){
+  const c = currentClient();
+  return `
+  <div class="topbar">
+    <div class="wrap">
+      <div class="topbar-row">
+        <div class="brand">growth<span class="dot">.</span></div>
+        <div class="subtitle" style="display:none;">Calendario de contenido</div>
+        <span class="spacer"></span>
+        ${isAgency() ? `<select class="select" style="width:auto;" data-action="select-client">
+          ${state.clients.map(cl=>`<option value="${cl.id}" ${cl.id===state.clientId?"selected":""}>${esc(cl.name)}</option>`).join("")}
+        </select>
+        <button class="btn btn-ghost" title="Historial y papelera" data-action="open-history">🕘</button>
+        <button class="btn btn-ghost" title="Nuevo cliente" data-action="open-addclient">+</button>` : ""}
+        <button class="btn btn-ghost" title="Cambiar usuario" data-action="switch-user">⏻</button>
+      </div>
+      <div class="tabs">
+        ${[["cal","Calendario"],["ig","Instagram"],["brand","Marca"],["ads","Publicidad"]].map(([t,label])=>
+          `<button class="tab-btn ${state.tab===t?'active':''}" data-action="set-tab" data-tab="${t}">${label}</button>`
+        ).join("")}
+      </div>
+    </div>
+  </div>
+  <div class="wrap content">
+    ${!state.clientId ? `<div class="loading-text">${isAgency()?'Todavía no hay clientes.':'No se encontró tu cuenta.'}</div>` :
+      state.tab==="cal" ? renderCalendarTab() :
+      state.tab==="ig" ? renderInstagramTab() :
+      state.tab==="brand" ? renderBrandTab() :
+      renderAdsTab()
+    }
+  </div>`;
+}
+function renderIdentity(){
+  const role = state.identityRole || "agency";
+  return `<div class="center-screen"><div class="login-card">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div class="brand" style="font-size:22px;">growth<span class="dot">.</span></div>
+      <div class="subtitle">Calendario de contenido</div>
+    </div>
+    <div class="field"><div class="field-label">Tu nombre</div><input class="input" id="id-name" placeholder="¿Cómo te llamás?"></div>
+    <div class="field">
+      <div class="field-label">¿Quién sos?</div>
+      <div class="seg">
+        <button class="seg-btn ${role==='agency'?'active':''}" data-action="identity-role" data-role="agency">Soy de la agencia</button>
+        <button class="seg-btn ${role==='client'?'active':''}" data-action="identity-role" data-role="client">Soy cliente</button>
+      </div>
+    </div>
+    ${role==="client"?`<div class="field"><div class="field-label">Tu empresa</div><select class="select" id="id-client">
+      <option value="">Elegí tu empresa…</option>
+      ${(state.clients||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}
+    </select></div>`:""}
+    ${sheetMsgHTML()}
+    <button class="btn btn-accent btn-block" data-action="identity-submit">Entrar</button>
+  </div></div>`;
+}
+
+/* ===================== EVENT DELEGATION ===================== */
+document.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const a = el.dataset.action;
+  if (a === "overlay-close"){ if (e.target === el) closeSheet(); return; }
+  if (a === "sheet-close"){ closeSheet(); return; }
+  if (a === "identity-role"){ state.identityRole = el.dataset.role; state.sheetMsg=""; render(); return; }
+  if (a === "identity-submit"){ identitySubmit(); return; }
+  if (a === "switch-user"){ if (confirm("¿Cambiar de usuario? Vas a tener que elegir tu nombre y rol de nuevo.")) await switchUser(); return; }
+  if (a === "set-tab"){ await setTab(el.dataset.tab); return; }
+  if (a === "month-prev"){ await changeMonth(-1); return; }
+  if (a === "month-next"){ await changeMonth(1); return; }
+  if (a === "open-day"){ openSheet("day", {date: el.dataset.date}); return; }
+  if (a === "new-item-kind"){
+    qs("new-item-kind").value = el.dataset.kind;
+    qs("kind-idea-btn").classList.toggle("active", el.dataset.kind==="idea");
+    qs("kind-event-btn").classList.toggle("active", el.dataset.kind==="event");
+    const fmtSel = qs("new-item-format");
+    const opts = el.dataset.kind==="event" ? EVENT_TYPES : FORMATS;
+    fmtSel.innerHTML = opts.map(o=>`<option>${o}</option>`).join("");
+    return;
+  }
+  if (a === "new-item-save"){ await submitNewItem(el.dataset.date); return; }
+  if (a === "item-status"){ await itemStatusChange(el.dataset.id, el.dataset.status); return; }
+  if (a === "item-comment"){ await itemAddComment(el.dataset.id); return; }
+  if (a === "item-edit"){ state.sheet.editingId = el.dataset.id; state.sheetMsg=""; render(); return; }
+  if (a === "item-edit-save"){ await itemEditSave(el.dataset.id); return; }
+  if (a === "item-edit-cancel"){ state.sheet.editingId = null; state.sheetMsg=""; render(); return; }
+  if (a === "item-delete"){ await itemDelete(el.dataset.id); return; }
+  if (a === "edit-profile"){ openSheet("editProfile"); return; }
+  if (a === "profile-save"){ await saveClientProfile(); return; }
+  if (a === "highlight-new"){ openSheet("highlightEdit", {id:null}); return; }
+  if (a === "highlight-edit-open"){ openSheet("highlightEdit", {id: el.dataset.id}); return; }
+  if (a === "highlight-save"){ await saveHighlight(el.dataset.id || null); return; }
+  if (a === "highlight-delete"){ await deleteHighlight(el.dataset.id); return; }
+  if (a === "highlight-status"){ await (async()=>{ try{ await setApprovalStatus("highlights", el.dataset.id, el.dataset.status); const h=state.highlights.find(x=>x.id===el.dataset.id); await logActivity({clientId:state.clientId, action:"update", entityType:"Destacada", label:`${h?h.label:""} → ${STATUS_LABEL[el.dataset.status]}`, byName:viewerName()}); render(); }catch(err){ alert("No se pudo guardar. Puede que tu cuenta no tenga permiso para esta acción."); } })(); return; }
+  if (a === "view-story"){ openSheet("storyViewer", {hid: el.dataset.hid, idx:0}); return; }
+  if (a === "story-prev"){ const idx=Math.max(0, parseInt(el.dataset.idx)-1); state.sheet.idx=idx; render(); return; }
+  if (a === "story-next"){ const max=parseInt(el.dataset.max); const idx=Math.min(max, parseInt(el.dataset.idx)+1); state.sheet.idx=idx; render(); return; }
+  if (a === "story-add"){ await addStory(el.dataset.hid); return; }
+  if (a === "story-delete"){ await deleteStory(el.dataset.sid, el.dataset.hid); return; }
+  if (a === "grid-edit"){ openSheet("gridEdit", {pos: parseInt(el.dataset.pos)}); return; }
+  if (a === "grid-view"){ openSheet("gridView", {pos: parseInt(el.dataset.pos)}); return; }
+  if (a === "grid-edit-open"){ openSheet("gridEdit", {pos: parseInt(el.dataset.pos)}); return; }
+  if (a === "grid-save"){ await saveGridItem(parseInt(el.dataset.pos)); return; }
+  if (a === "grid-status"){ await gridStatusChange(parseInt(el.dataset.pos), el.dataset.status); return; }
+  if (a === "grid-delete"){ await deleteGridItem(parseInt(el.dataset.pos)); return; }
+  if (a === "brand-delete"){ await brandDelete(el.dataset.id); return; }
+  if (a === "ads-platform"){ state.adsPlatform = el.dataset.platform; render(); return; }
+  if (a === "campaign-new"){ openSheet("campaignEdit", {id:null, platform: state.adsPlatform}); return; }
+  if (a === "campaign-view"){ openSheet("campaignView", {id: el.dataset.id}); return; }
+  if (a === "campaign-edit-open"){ openSheet("campaignEdit", {id: el.dataset.id, platform: el.dataset.platform}); return; }
+  if (a === "campaign-save"){ await saveCampaign(el.dataset.id || null, el.dataset.platform); return; }
+  if (a === "campaign-delete"){ await deleteCampaign(el.dataset.id); return; }
+  if (a === "creative-add-open"){ state.creativeMode = "file"; openSheet("creativeAdd", {cid: el.dataset.cid, platform: el.dataset.platform}); return; }
+  if (a === "creative-mode"){ state.creativeMode = el.dataset.mode; state.sheetMsg=""; render(); return; }
+  if (a === "creative-save"){ await addCreative(el.dataset.cid, el.dataset.platform); return; }
+  if (a === "creative-delete"){ await deleteCreative(el.dataset.id); return; }
+  if (a === "open-history"){ openSheet("history"); await loadHistory(); return; }
+  if (a === "history-tab"){ state.historyTab = el.dataset.tab; render(); return; }
+  if (a === "trash-restore"){ await trashRestore(el.dataset.table, el.dataset.id); return; }
+  if (a === "trash-purge"){ await trashPurge(el.dataset.table, el.dataset.id); return; }
+  if (a === "open-addclient"){ openSheet("addClient"); return; }
+  if (a === "addclient-save"){ await addClientSave(); return; }
+});
+document.addEventListener("change", async (e) => {
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const a = el.dataset.action;
+  if (a === "select-client"){ await setClient(el.value); return; }
+  if (a === "brand-upload"){ const f = el.files[0]; if (f) await brandUpload(el.dataset.cat, f); el.value=""; return; }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sheet) closeSheet(); });
+function attachDynamicListeners(){ /* reserved for future per-render wiring */ }
+
+/* ===================== INIT ===================== */
+init();
+</script>
+</body>
+</html>
