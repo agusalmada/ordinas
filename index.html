@@ -127,6 +127,21 @@ const sb = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
 
 /* ===================== CONSTANTS ===================== */
 const MONTHS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function monthYearLabel(dateStr){
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  const y = parts[0], m = parts[1];
+  if (!y || !m) return "";
+  const name = MONTHS[parseInt(m,10)-1];
+  if (!name) return "";
+  return name.charAt(0).toUpperCase()+name.slice(1)+" "+y;
+}
+function campMonthLabel(c){
+  const s = monthYearLabel(c.start_date);
+  const e = monthYearLabel(c.end_date);
+  if (s && e && s !== e) return s+" → "+e;
+  return s || e || "";
+}
 const WEEKDAYS_SHORT = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 const EVENT_TYPES = ["Evento","Curso","Producción"];
 const FORMATS = ["Reel","Post","Carrusel","Story"];
@@ -692,7 +707,10 @@ function renderAdsTab(){
         <div style="font-weight:500;font-size:14px;" class="truncate">${esc(c.name||"(sin nombre)")}</div>
         <div style="font-size:12px;color:var(--fg-faint);">${c.budget?"Presupuesto: "+esc(c.budget)+" · ":""}${esc(c.start_date||"")}${c.end_date?" → "+esc(c.end_date):""}</div>
       </div>
-      ${c.type?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">${esc(c.type)}</span>`:""}
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+        ${campMonthLabel(c)?`<span class="badge" style="background:var(--accent-soft);color:var(--accent-strong);white-space:nowrap;">${esc(campMonthLabel(c))}</span>`:""}
+        ${c.type?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">${esc(c.type)}</span>`:""}
+      </div>
     </button>`).join("")}
   `;
 }
@@ -973,6 +991,7 @@ function sheetCampaignView(s){
   <div class="row-gap" style="margin-bottom:10px;">
     <span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">${c.platform==="meta"?"Meta Ads":"Google Ads"}</span>
     ${c.type?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">${esc(c.type)}</span>`:""}
+    ${campMonthLabel(c)?`<span class="badge" style="background:var(--accent-soft);color:var(--accent-strong);">${esc(campMonthLabel(c))}</span>`:""}
   </div>
   <div style="font-size:14px;color:var(--fg-dim);margin-bottom:4px;">${c.budget?"Presupuesto: "+esc(c.budget):""}</div>
   <div style="font-size:14px;color:var(--fg-dim);margin-bottom:12px;">${c.start_date?"Desde "+c.start_date:""}${c.end_date?" hasta "+c.end_date:""}</div>
