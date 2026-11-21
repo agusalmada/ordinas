@@ -79,6 +79,10 @@ a{color:var(--accent-strong);}
 .chip-idea{background:var(--accent-soft);color:var(--accent-strong);}
 .chip-event{background:var(--warn-soft);color:var(--warn);}
 .chip-more{font-size:9.5px;color:var(--fg-faint);}
+.status-dot{display:inline-block;width:6px;height:6px;border-radius:999px;margin-right:4px;flex-shrink:0;vertical-align:middle;}
+.status-dot-ok{background:var(--ok);}
+.status-dot-bad{background:var(--bad);}
+.status-dot-neutral{background:#9a9a90;}
 .dots{display:flex;gap:2px;}
 .dot{width:5px;height:5px;border-radius:999px;}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
@@ -146,6 +150,7 @@ const WEEKDAYS_SHORT = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 const EVENT_TYPES = ["Evento","Curso","Producción"];
 const FORMATS = ["Reel","Post","Carrusel","Story"];
 const FORMAT_CLASS = {Reel:"b-reel",Post:"b-post",Carrusel:"b-carrusel",Story:"b-story"};
+const STATUS_DOT_CLASS = {aprobado:"status-dot-ok",cambios:"status-dot-bad",pendiente:"status-dot-neutral",borrador:"status-dot-neutral"};
 const STATUS_LABEL = {borrador:"Borrador",pendiente:"Pendiente",aprobado:"Aprobado",cambios:"Pide cambios"};
 const STATUS_CLASS = {borrador:"b-borrador",pendiente:"b-pendiente",aprobado:"b-aprobado",cambios:"b-cambios"};
 const BRAND_CATEGORIES = ["Plan de marketing","Brief","Logos","Manual de marca","Stock (imágenes y videos)"];
@@ -366,7 +371,7 @@ function renderCalendarTab(){
     const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const items = state.calendarItems.filter(it => it.date === key);
     const shown = items.slice(0,2);
-    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':'chip-idea'}">${esc(it.title||(it.kind==='event'?'Evento':'Idea'))}</span>`).join("");
+    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':'chip-idea'}"><span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}"></span>${esc(it.title||(it.kind==='event'?'Evento':'Idea'))}</span>`).join("");
     if (items.length > 2) chipsHtml += `<span class="chip-more">+${items.length-2} más</span>`;
     cells += `<button class="day-cell${key===todayKey?' today':''}" data-action="open-day" data-date="${key}"><span class="day-num">${d}</span><span class="day-chips">${chipsHtml}</span></button>`;
   }
