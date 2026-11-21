@@ -103,6 +103,11 @@ a{color:var(--accent-strong);}
 .story-img-wrap{position:relative;border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-3);margin-bottom:14px;max-height:60vh;display:flex;align-items:center;justify-content:center;}
 .story-img-wrap img{max-width:100%;max-height:60vh;object-fit:contain;}
 .story-tap{position:absolute;top:0;bottom:0;width:50%;background:transparent;border:none;cursor:pointer;}
+.story-zoom-btn{position:absolute;top:8px;right:8px;z-index:2;background:rgba(0,0,0,.45);color:#fff;border:none;border-radius:999px;width:30px;height:30px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.story-zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px;}
+.story-zoom-overlay img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;}
+.hl-circle-wrap{position:relative;display:inline-flex;}
+.hl-dot{position:absolute;bottom:0;right:0;width:14px;height:14px;border-radius:999px;border:2px solid var(--surface);}
 .loading-text{color:var(--fg-faint);font-size:14px;text-align:center;padding:60px 0;}
 .list-item{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;}
 .list-item .grow{flex:1;min-width:0;}
@@ -548,7 +553,7 @@ function renderInstagramTab(){
     ${isAgency()?`<button class="btn btn-ghost btn-sm" data-action="edit-profile">Editar</button>`:""}
   </div>
   <div class="hl-row">
-    ${hls.map(h=>`<button class="hl-item" data-action="view-story" data-hid="${h.id}"><span class="hl-circle">${h.image_url?`<img src="${esc(h.image_url)}">`:"✦"}</span><span class="hl-label">${esc(h.label)}</span></button>`).join("")}
+    ${hls.map(h=>`<button class="hl-item" data-action="view-story" data-hid="${h.id}"><span class="hl-circle-wrap"><span class="hl-circle">${h.image_url?`<img src="${esc(h.image_url)}">`:"✦"}</span>${STATUS_DOT_CLASS[h.status]?`<span class="hl-dot ${STATUS_DOT_CLASS[h.status]}"></span>`:""}</span><span class="hl-label">${esc(h.label)}</span></button>`).join("")}
     ${isAgency()?`<button class="hl-item" data-action="highlight-new"><span class="hl-circle" style="border:1px dashed var(--accent-strong);color:var(--accent-strong);">+</span><span class="hl-label">Nueva</span></button>`:""}
   </div>
   <div class="topbar-row" style="padding-top:12px;margin-bottom:6px;">
@@ -951,7 +956,9 @@ function sheetStoryViewer(s){
   <div class="story-img-wrap">
     <img src="${esc(st.image_url||'')}">
     ${stories.length>1?`<button class="story-tap" style="left:0;" data-action="story-prev" data-hid="${h.id}" data-idx="${idx}"></button><button class="story-tap" style="right:0;" data-action="story-next" data-hid="${h.id}" data-idx="${idx}" data-max="${stories.length-1}"></button>`:""}
+    <button class="story-zoom-btn" data-action="story-zoom" title="Ampliar">⤢</button>
   </div>
+  ${s.zoomed?`<div class="story-zoom-overlay" data-action="story-zoom-close"><img src="${esc(st.image_url||'')}"></div>`:""}
   <div style="margin-bottom:10px;"><span class="badge ${STATUS_CLASS[h.status]}">${STATUS_LABEL[h.status]}</span></div>
   <div class="row-gap" style="margin-bottom:8px;">
     <button class="btn" data-action="highlight-status" data-id="${h.id}" data-status="aprobado">✓ Aprobar</button>
@@ -1190,6 +1197,8 @@ document.addEventListener("click", async (e) => {
   if (a === "view-story"){ openSheet("storyViewer", {hid: el.dataset.hid, idx:0}); return; }
   if (a === "story-prev"){ const idx=Math.max(0, parseInt(el.dataset.idx)-1); state.sheet.idx=idx; render(); return; }
   if (a === "story-next"){ const max=parseInt(el.dataset.max); const idx=Math.min(max, parseInt(el.dataset.idx)+1); state.sheet.idx=idx; render(); return; }
+  if (a === "story-zoom"){ state.sheet.zoomed = true; render(); return; }
+  if (a === "story-zoom-close"){ state.sheet.zoomed = false; render(); return; }
   if (a === "story-add"){ await addStory(el.dataset.hid); return; }
   if (a === "story-delete"){ await deleteStory(el.dataset.sid, el.dataset.hid); return; }
   if (a === "grid-edit"){ openSheet("gridEdit", {pos: parseInt(el.dataset.pos)}); return; }
