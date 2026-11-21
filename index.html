@@ -197,6 +197,7 @@ const state = {
   month: startOfMonth(new Date()),
   calendarItems: [],
   comments: {},
+  highlightComments: {},
   gridItems: [],
   highlights: [],
   highlightStories: [],
@@ -497,11 +498,25 @@ async function loadHighlights(){
     sb.from("highlight_stories").select("*").eq("client_id", state.clientId).is("deleted_at", null),
   ]);
   state.highlights = h||[]; state.highlightStories = s||[];
+  const hIds = state.highlights.map(x=>x.id);
+  let hc = [];
+  if (hIds.length){ const {data} = await sb.from("highlight_comments").select("*").in("highlight_id", hIds).order("created_at"); hc = data||[]; }
+  const hcMap = {}; hc.forEach(c => { (hcMap[c.highlight_id] ||= []).push(c); });
+  state.highlightComments = hcMap;
   removeChannel("ig");
   channels.ig = sb.channel("ig-"+state.clientId)
     .on("postgres_changes",{event:"*",schema:"public",table:"highlights",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadHighlights(); render();})
     .on("postgres_changes",{event:"*",schema:"public",table:"highlight_stories",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadHighlights(); render();})
+    .on("postgres_changes",{event:"*",schema:"public",table:"highlight_comments",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadHighlights(); render();})
     .subscribe();
+}
+async function highlightAddComment(id){
+  const input = qs("hcomment-input-"+id);
+  const text = input ? input.value.trim() : "";
+  if (!text) return;
+  const {error} = await sb.from("highlight_comments").insert({highlight_id:id, client_id:state.clientId, author_name: viewerName(), text});
+  if (error) { alert("No se pudo enviar: "+error.message); return; }
+  if (input) input.value = "";
 }
 async function loadGrid(){
   const mk = monthKey(state.month);
@@ -942,10 +957,15 @@ function sheetStoryViewer(s){
     <button class="btn" data-action="highlight-status" data-id="${h.id}" data-status="aprobado">✓ Aprobar</button>
     <button class="btn" data-action="highlight-status" data-id="${h.id}" data-status="cambios">Pedir cambios</button>
   </div>
-  ${isAgency()?`<div class="row-gap">
+  ${isAgency()?`<div class="row-gap" style="margin-bottom:12px;">
     <button class="btn btn-ghost" data-action="highlight-edit-open" data-id="${h.id}">Editar destacada</button>
     <button class="btn btn-danger" data-action="story-delete" data-sid="${st.id}" data-hid="${h.id}">Eliminar esta historia</button>
-  </div>`:""}`;
+  </div>`:""}
+  ${(state.highlightComments[h.id]||[]).map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("")}
+  <div style="display:flex;gap:6px;margin-top:8px;">
+    <input class="input" style="flex:1;" placeholder="Escribir qué cambio pedís…" id="hcomment-input-${h.id}" />
+    <button class="btn btn-accent btn-sm" data-action="highlight-comment" data-id="${h.id}">Enviar</button>
+  </div>`;
 }
 function sheetGridEdit(s){
   const g = state.gridItems.find(x=>x.position===s.pos);
@@ -1166,6 +1186,7 @@ document.addEventListener("click", async (e) => {
   if (a === "highlight-save"){ await saveHighlight(el.dataset.id || null); return; }
   if (a === "highlight-delete"){ await deleteHighlight(el.dataset.id); return; }
   if (a === "highlight-status"){ await (async()=>{ try{ await setApprovalStatus("highlights", el.dataset.id, el.dataset.status); const h=state.highlights.find(x=>x.id===el.dataset.id); await logActivity({clientId:state.clientId, action:"update", entityType:"Destacada", label:`${h?h.label:""} → ${STATUS_LABEL[el.dataset.status]}`, byName:viewerName()}); render(); }catch(err){ alert("No se pudo guardar: "+err.message); } })(); return; }
+  if (a === "highlight-comment"){ await highlightAddComment(el.dataset.id); return; }
   if (a === "view-story"){ openSheet("storyViewer", {hid: el.dataset.hid, idx:0}); return; }
   if (a === "story-prev"){ const idx=Math.max(0, parseInt(el.dataset.idx)-1); state.sheet.idx=idx; render(); return; }
   if (a === "story-next"){ const max=parseInt(el.dataset.max); const idx=Math.min(max, parseInt(el.dataset.idx)+1); state.sheet.idx=idx; render(); return; }
