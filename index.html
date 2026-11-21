@@ -79,6 +79,8 @@ a{color:var(--accent-strong);}
 .chip-idea{background:var(--accent-soft);color:var(--accent-strong);}
 .chip-event{background:var(--warn-soft);color:var(--warn);}
 .chip-more{font-size:9.5px;color:var(--fg-faint);}
+.chip-dot[draggable="true"]{cursor:grab;}
+.day-cell.drop-hover{outline:2px dashed var(--accent-strong);outline-offset:-2px;}
 .status-dot{display:inline-block;width:6px;height:6px;border-radius:999px;margin-right:4px;flex-shrink:0;vertical-align:middle;}
 .status-dot-ok{background:var(--ok);}
 .status-dot-bad{background:var(--bad);}
@@ -387,9 +389,9 @@ function renderCalendarTab(){
     const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const items = state.calendarItems.filter(it => it.date === key);
     const shown = items.slice(0,2);
-    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':'chip-idea'}"><span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}"></span>${esc(it.title||(it.kind==='event'?'Evento':'Idea'))}</span>`).join("");
+    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':'chip-idea'}"${isAgency()?` draggable="true" data-drag-id="${it.id}"`:""}><span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}"></span>${esc(it.title||(it.kind==='event'?'Evento':'Idea'))}</span>`).join("");
     if (items.length > 2) chipsHtml += `<span class="chip-more">+${items.length-2} más</span>`;
-    cells += `<button class="day-cell${key===todayKey?' today':''}" data-action="open-day" data-date="${key}"><span class="day-num">${d}</span><span class="day-chips">${chipsHtml}</span></button>`;
+    cells += `<button class="day-cell${key===todayKey?' today':''}" data-action="open-day" data-date="${key}" data-drop-date="${key}"><span class="day-num">${d}</span><span class="day-chips">${chipsHtml}</span></button>`;
   }
   return `
     <div class="topbar-row" style="padding-top:0;margin-bottom:10px;">
@@ -438,7 +440,7 @@ function itemEditFormHTML(it){
   <div class="card">
     <div class="field"><input class="input" id="edit-item-title-${it.id}" value="${esc(it.title)}" placeholder="Título"></div>
     <div class="field"><select class="select" id="edit-item-format-${it.id}">${opts.map(f=>`<option ${it.format===f?"selected":""}>${f}</option>`).join("")}</select></div>
-    <div class="field"><textarea class="textarea" id="edit-item-desc-${it.id}" rows="2">${esc(it.description||"")}</textarea></div>
+    <div class="field"><textarea class="textarea" id="edit-item-desc-${it.id}" rows="7">${esc(it.description||"")}</textarea></div>
     ${sheetMsgHTML()}
     <div class="row-gap">
       <button class="btn btn-accent" data-action="item-edit-save" data-id="${it.id}">Guardar</button>
@@ -494,6 +496,15 @@ async function itemDelete(id){
   if (!it) return;
   if (!confirm("¿Eliminar? Se puede recuperar desde el historial.")) return;
   await trashRow("calendar_items", id, viewerName(), {clientId:state.clientId, entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label: it.title});
+}
+async function moveItemToDate(id, newDate){
+  if (!isAgency()) return;
+  const it = state.calendarItems.find(i=>i.id===id);
+  if (!it || it.date === newDate) return;
+  const {data, error} = await sb.from("calendar_items").update({date:newDate}).eq("id", id).select("id");
+  if (error){ alert("No se pudo mover: "+error.message); return; }
+  if (!data || data.length===0){ alert("Supabase no dejó mover el ítem (revisá el permiso de UPDATE para calendar_items)."); return; }
+  await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it.title} → movido al ${newDate}`, byName:viewerName()});
 }
 
 /* ===================== INSTAGRAM ===================== */
@@ -902,7 +913,7 @@ function sheetDay(s){
     <input type="hidden" id="new-item-kind" value="idea">
     <div class="field"><input class="input" id="new-item-title" placeholder="Título"></div>
     <div class="field"><select class="select" id="new-item-format">${FORMATS.map(f=>`<option>${f}</option>`).join("")}</select></div>
-    <div class="field"><textarea class="textarea" id="new-item-desc" rows="2" placeholder="Guion, idea, detalle…"></textarea></div>
+    <div class="field"><textarea class="textarea" id="new-item-desc" rows="7" placeholder="Guion, idea, detalle…"></textarea></div>
     ${sheetMsgHTML()}
     <button class="btn btn-accent btn-block" data-action="new-item-save" data-date="${s.date}">Agregar</button>
   </div>` : ""}`;
@@ -1233,6 +1244,32 @@ document.addEventListener("change", async (e) => {
   if (a === "brand-upload"){ const f = el.files[0]; if (f) await brandUpload(el.dataset.cat, f); el.value=""; return; }
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sheet) closeSheet(); });
+document.addEventListener("dragstart", (e) => {
+  const el = e.target.closest("[data-drag-id]");
+  if (!el) return;
+  e.dataTransfer.setData("text/plain", el.dataset.dragId);
+  e.dataTransfer.effectAllowed = "move";
+});
+document.addEventListener("dragover", (e) => {
+  const cell = e.target.closest(".day-cell[data-drop-date]");
+  if (!cell) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  cell.classList.add("drop-hover");
+});
+document.addEventListener("dragleave", (e) => {
+  const cell = e.target.closest(".day-cell[data-drop-date]");
+  if (cell) cell.classList.remove("drop-hover");
+});
+document.addEventListener("drop", async (e) => {
+  const cell = e.target.closest(".day-cell[data-drop-date]");
+  if (!cell) return;
+  e.preventDefault();
+  cell.classList.remove("drop-hover");
+  const itemId = e.dataTransfer.getData("text/plain");
+  if (!itemId) return;
+  await moveItemToDate(itemId, cell.dataset.dropDate);
+});
 function attachDynamicListeners(){ /* reserved for future per-render wiring */ }
 
 /* ===================== INIT ===================== */
