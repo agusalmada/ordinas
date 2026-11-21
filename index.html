@@ -237,8 +237,9 @@ async function purgeRow(table, id, byName, opts){
   await logActivity({clientId:opts.clientId, action:"purge", entityType:opts.entityType, label:opts.label, byName, collection:table, docId:id});
 }
 async function setApprovalStatus(table, id, status){
-  const {error} = await sb.from(table).update({status}).eq("id", id);
+  const {data, error} = await sb.from(table).update({status}).eq("id", id).select("id");
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Supabase no dejó guardar el cambio (revisá que exista una política de UPDATE para la tabla \""+table+"\").");
 }
 async function uploadMedia(path, file){
   const {error} = await sb.storage.from("media").upload(path, file, {upsert:true, contentType:file.type||undefined});
@@ -249,6 +250,11 @@ async function uploadMedia(path, file){
 function isAgency(){ return state.profile && state.profile.role === "agency"; }
 function viewerName(){ return (state.profile && state.profile.name) || (isAgency()?"Agencia":"Cliente"); }
 function currentClient(){ return state.clients.find(c => c.id === state.clientId) || null; }
+function siblingClients(){
+  const c = currentClient();
+  if (!c || !c.group_key) return [];
+  return state.clients.filter(x => x.group_key === c.group_key);
+}
 
 /* ===================== RENDER ROOT ===================== */
 function render(){
@@ -323,6 +329,10 @@ function subscribeClients(){
 }
 async function setClient(id){
   state.clientId = id;
+  if (state.profile && state.profile.role === "client"){
+    state.profile = {...state.profile, clientId: id};
+    saveProfileToStorage(state.profile);
+  }
   await loadTabData();
   render();
 }
@@ -464,7 +474,7 @@ async function itemStatusChange(id, status){
     const it = state.calendarItems.find(i=>i.id===id);
     await setApprovalStatus("calendar_items", id, status);
     if (it) await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it.title} → ${STATUS_LABEL[status]}`, byName:viewerName()});
-  } catch(e){ alert("No se pudo guardar. Puede que tu cuenta no tenga permiso para esta acción."); }
+  } catch(e){ alert("No se pudo guardar: "+e.message); }
 }
 async function itemAddComment(id){
   const input = qs("comment-input-"+id);
@@ -602,7 +612,7 @@ async function gridStatusChange(pos, status){
     await setApprovalStatus("grid_items", g.id, status);
     await logActivity({clientId:state.clientId, action:"update", entityType:"Publicación de Instagram", label:`Publicación ${pos} → ${STATUS_LABEL[status]}`, byName:viewerName()});
     render();
-  }catch(e){ alert("No se pudo guardar. Puede que tu cuenta no tenga permiso para esta acción."); }
+  }catch(e){ alert("No se pudo guardar: "+e.message); }
 }
 async function saveGridItem(pos){
   const caption = val("grid-caption").trim();
@@ -1073,7 +1083,10 @@ function renderShell(){
           ${state.clients.map(cl=>`<option value="${cl.id}" ${cl.id===state.clientId?"selected":""}>${esc(cl.name)}</option>`).join("")}
         </select>
         <button class="btn btn-ghost" title="Historial y papelera" data-action="open-history">🕘</button>
-        <button class="btn btn-ghost" title="Nuevo cliente" data-action="open-addclient">+</button>` : ""}
+        <button class="btn btn-ghost" title="Nuevo cliente" data-action="open-addclient">+</button>` :
+        (siblingClients().length>1 ? `<select class="select" style="width:auto;" data-action="select-client">
+          ${siblingClients().map(cl=>`<option value="${cl.id}" ${cl.id===state.clientId?"selected":""}>${esc(cl.name)}</option>`).join("")}
+        </select>` : "")}
         <button class="btn btn-ghost" title="Cambiar usuario" data-action="switch-user">⏻</button>
       </div>
       <div class="tabs">
@@ -1152,7 +1165,7 @@ document.addEventListener("click", async (e) => {
   if (a === "highlight-edit-open"){ openSheet("highlightEdit", {id: el.dataset.id}); return; }
   if (a === "highlight-save"){ await saveHighlight(el.dataset.id || null); return; }
   if (a === "highlight-delete"){ await deleteHighlight(el.dataset.id); return; }
-  if (a === "highlight-status"){ await (async()=>{ try{ await setApprovalStatus("highlights", el.dataset.id, el.dataset.status); const h=state.highlights.find(x=>x.id===el.dataset.id); await logActivity({clientId:state.clientId, action:"update", entityType:"Destacada", label:`${h?h.label:""} → ${STATUS_LABEL[el.dataset.status]}`, byName:viewerName()}); render(); }catch(err){ alert("No se pudo guardar. Puede que tu cuenta no tenga permiso para esta acción."); } })(); return; }
+  if (a === "highlight-status"){ await (async()=>{ try{ await setApprovalStatus("highlights", el.dataset.id, el.dataset.status); const h=state.highlights.find(x=>x.id===el.dataset.id); await logActivity({clientId:state.clientId, action:"update", entityType:"Destacada", label:`${h?h.label:""} → ${STATUS_LABEL[el.dataset.status]}`, byName:viewerName()}); render(); }catch(err){ alert("No se pudo guardar: "+err.message); } })(); return; }
   if (a === "view-story"){ openSheet("storyViewer", {hid: el.dataset.hid, idx:0}); return; }
   if (a === "story-prev"){ const idx=Math.max(0, parseInt(el.dataset.idx)-1); state.sheet.idx=idx; render(); return; }
   if (a === "story-next"){ const max=parseInt(el.dataset.max); const idx=Math.min(max, parseInt(el.dataset.idx)+1); state.sheet.idx=idx; render(); return; }
