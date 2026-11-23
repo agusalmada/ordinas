@@ -165,8 +165,8 @@ const META_CAMPAIGN_TYPES = ["Mensajes","Interacción"];
 const GOOGLE_CAMPAIGN_TYPES = ["Search","Performance Max"];
 const ACTION_LABEL = {create:"creó",update:"actualizó",delete:"eliminó",restore:"restauró",purge:"eliminó para siempre"};
 const TRASH_TABLES = [
-  {table:"calendar_items", entityType:"Idea / evento", storageCol:null},
-  {table:"grid_items", entityType:"Publicación de Instagram", storageCol:"image_path"},
+  {table:"calendar_items", entityType:"Idea / evento", storageCol:"media_path"},
+  {table:"item_images", entityType:"Imagen de carrusel", storageCol:"image_path"},
   {table:"highlights", entityType:"Destacada", storageCol:"image_path"},
   {table:"highlight_stories", entityType:"Historia de destacada", storageCol:"image_path"},
   {table:"brand_files", entityType:"Archivo de marca", storageCol:"path"},
@@ -205,7 +205,7 @@ const state = {
   calendarItems: [],
   comments: {},
   highlightComments: {},
-  gridItems: [],
+  itemImages: {},
   highlights: [],
   highlightStories: [],
   brandFiles: [],
@@ -222,7 +222,7 @@ const state = {
 };
 const channels = {};
 function removeChannel(key){ if(channels[key]){ sb.removeChannel(channels[key]); delete channels[key]; } }
-function removeTabChannels(){ ["cal","ig","igg","brand","ads"].forEach(removeChannel); }
+function removeTabChannels(){ ["cal","ig","brand","ads"].forEach(removeChannel); }
 
 /* ===================== DATA HELPERS (shared) ===================== */
 async function logActivity(opts){
@@ -358,7 +358,7 @@ async function loadTabData(){
   if (!state.clientId) return;
   removeTabChannels();
   if (state.tab === "cal") await loadCalendar();
-  else if (state.tab === "ig") { await loadHighlights(); await loadGrid(); }
+  else if (state.tab === "ig") { await loadHighlights(); await loadCalendar(); }
   else if (state.tab === "brand") await loadBrand();
   else if (state.tab === "ads") await loadAds();
 }
@@ -369,14 +369,47 @@ async function loadCalendar(){
   state.calendarItems = items || [];
   const ids = state.calendarItems.map(i=>i.id);
   let comments = [];
-  if (ids.length){ const {data} = await sb.from("comments").select("*").in("item_id", ids).order("created_at"); comments = data||[]; }
+  let imgs = [];
+  if (ids.length){
+    const [{data:cm},{data:im}] = await Promise.all([
+      sb.from("comments").select("*").in("item_id", ids).order("created_at"),
+      sb.from("item_images").select("*").in("item_id", ids).is("deleted_at", null).order("order"),
+    ]);
+    comments = cm||[]; imgs = im||[];
+  }
   const map = {}; comments.forEach(c => { (map[c.item_id] ||= []).push(c); });
   state.comments = map;
+  const imgMap = {}; imgs.forEach(x => { (imgMap[x.item_id] ||= []).push(x); });
+  state.itemImages = imgMap;
   removeChannel("cal");
   channels.cal = sb.channel("cal-"+state.clientId)
     .on("postgres_changes", {event:"*", schema:"public", table:"calendar_items", filter:`client_id=eq.${state.clientId}`}, async()=>{ await loadCalendar(); render(); })
     .on("postgres_changes", {event:"*", schema:"public", table:"comments", filter:`client_id=eq.${state.clientId}`}, async()=>{ await loadCalendar(); render(); })
+    .on("postgres_changes", {event:"*", schema:"public", table:"item_images", filter:`client_id=eq.${state.clientId}`}, async()=>{ await loadCalendar(); render(); })
     .subscribe();
+}
+async function addItemImages(itemId){
+  const el = qs("item-carousel-file");
+  const files = el && el.files ? Array.from(el.files) : [];
+  if (!files.length) return;
+  setSheetBusy(true);
+  try{
+    let nextOrder = (state.itemImages[itemId]||[]).length;
+    for (const f of files){
+      const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f);
+      const {error} = await sb.from("item_images").insert({item_id:itemId, client_id:state.clientId, order:nextOrder, image_url:url, image_path:path});
+      if (error) throw error;
+      nextOrder++;
+    }
+    const it = state.calendarItems.find(x=>x.id===itemId);
+    await logActivity({clientId:state.clientId, action:"create", entityType:"Idea / evento", label:`${it?it.title:""} (+${files.length} imagen${files.length>1?"es":""} de carrusel)`, byName:viewerName()});
+    if (el) el.value = "";
+    render();
+  }catch(e){ alert("No se pudo subir: "+e.message); }
+  finally{ setSheetBusy(false); }
+}
+async function deleteItemImage(imgId){
+  await trashRow("item_images", imgId, viewerName(), {clientId:state.clientId, entityType:"Idea / evento", label:"Imagen de carrusel"});
 }
 function renderCalendarTab(){
   const y = state.month.getFullYear(), m = state.month.getMonth();
@@ -421,6 +454,7 @@ function itemCardHTML(it){
       <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
     </div>
     ${it.description ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.description)}</div>` : ""}
+    ${it.media_url ? (it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;object-fit:cover;">`) : ""}
     <div class="row-gap" style="margin-bottom:6px;">
       <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
       <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
@@ -441,9 +475,14 @@ function itemEditFormHTML(it){
     <div class="field"><input class="input" id="edit-item-title-${it.id}" value="${esc(it.title)}" placeholder="Título"></div>
     <div class="field"><select class="select" id="edit-item-format-${it.id}">${opts.map(f=>`<option ${it.format===f?"selected":""}>${f}</option>`).join("")}</select></div>
     <div class="field"><textarea class="textarea" id="edit-item-desc-${it.id}" rows="7">${esc(it.description||"")}</textarea></div>
+    ${it.format==="Reel"?`<div class="field"><div class="field-label">Link del Reel publicado (opcional)</div><input class="input" id="edit-item-reellink-${it.id}" value="${esc(it.reel_link||'')}" placeholder="https://instagram.com/reel/…"></div>`:""}
+    <div class="field"><div class="field-label">Imagen o video (opcional)</div>
+      ${it.media_url?`<div style="margin-bottom:6px;">${it.media_type==="video"?`<video src="${esc(it.media_url)}" controls style="width:100%;max-height:200px;border-radius:10px;"></video>`:`<img src="${esc(it.media_url)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;">`}</div>`:""}
+      <input type="file" accept="image/*,video/*" id="edit-item-media-${it.id}" placeholder="${it.media_url?'Reemplazar…':''}">
+    </div>
     ${sheetMsgHTML()}
     <div class="row-gap">
-      <button class="btn btn-accent" data-action="item-edit-save" data-id="${it.id}">Guardar</button>
+      <button class="btn btn-accent" data-action="item-edit-save" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Guardando…":"Guardar"}</button>
       <button class="btn btn-ghost" data-action="item-edit-cancel">Cancelar</button>
     </div>
   </div>`;
@@ -454,11 +493,19 @@ async function itemEditSave(id){
   const description = val("edit-item-desc-"+id).trim();
   if (!title){ setSheetMsg("Poné un título.", true); return; }
   const it = state.calendarItems.find(i=>i.id===id);
-  const {error} = await sb.from("calendar_items").update({title, format, description}).eq("id", id);
-  if (error){ setSheetMsg("No se pudo guardar: "+error.message, true); return; }
-  await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
-  state.sheet.editingId = null;
-  render();
+  const f = file0("edit-item-media-"+id);
+  const reelLinkEl = qs("edit-item-reellink-"+id);
+  setSheetBusy(true);
+  try{
+    const patch = {title, format, description, reel_link: format==="Reel" && reelLinkEl ? reelLinkEl.value.trim() : ""};
+    if (f){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
+    const {error} = await sb.from("calendar_items").update(patch).eq("id", id);
+    if (error) throw error;
+    await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
+    state.sheet.editingId = null;
+    render();
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
 }
 async function openDaySheet(date){
   state.sheet = {type:"day", date, newKind:"idea"};
@@ -470,12 +517,20 @@ async function submitNewItem(date){
   const title = val("new-item-title").trim();
   const format = val("new-item-format");
   const description = val("new-item-desc").trim();
+  const f = file0("new-item-media");
   if (!title){ setSheetMsg("Poné un título.", true); return; }
-  const {error} = await sb.from("calendar_items").insert({client_id: state.clientId, date, kind, title, format, description, status:"borrador"});
-  if (error){ setSheetMsg("No se pudo guardar: "+error.message, true); return; }
-  await logActivity({clientId:state.clientId, action:"create", entityType: kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
-  qs("new-item-title").value=""; qs("new-item-desc").value="";
-  setSheetMsg("Agregado.", false);
+  setSheetBusy(true);
+  try{
+    const patch = {client_id: state.clientId, date, kind, title, format, description, status:"borrador"};
+    if (f){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
+    const {error} = await sb.from("calendar_items").insert(patch);
+    if (error) throw error;
+    await logActivity({clientId:state.clientId, action:"create", entityType: kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
+    qs("new-item-title").value=""; qs("new-item-desc").value="";
+    const mEl = qs("new-item-media"); if (mEl) mEl.value="";
+    setSheetMsg("Agregado.", false);
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
 }
 async function itemStatusChange(id, status){
   try {
@@ -534,25 +589,19 @@ async function highlightAddComment(id){
   if (error) { alert("No se pudo enviar: "+error.message); return; }
   if (input) input.value = "";
 }
-async function loadGrid(){
-  const mk = monthKey(state.month);
-  const {data} = await sb.from("grid_items").select("*").eq("client_id", state.clientId).eq("month_key", mk).is("deleted_at", null);
-  state.gridItems = data||[];
-  removeChannel("igg");
-  channels.igg = sb.channel("igg-"+state.clientId+"-"+mk)
-    .on("postgres_changes",{event:"*",schema:"public",table:"grid_items",filter:`client_id=eq.${state.clientId}`}, async()=>{await loadGrid(); render();})
-    .subscribe();
+function feedItems(){
+  return state.calendarItems
+    .filter(it => it.kind === "idea" && it.format !== "Story")
+    .sort((a,b) => (b.date||"").localeCompare(a.date||""));
 }
 function renderInstagramTab(){
   const c = currentClient();
   const hls = state.highlights;
-  const slots = [];
-  for (let p=1;p<=12;p++){
-    const g = state.gridItems.find(x=>x.position===p);
-    slots.push(`<button class="grid-slot" data-action="${g&&g.image_url?'grid-view':'grid-edit'}" data-pos="${p}">
-      ${g&&g.image_url ? `<img src="${esc(g.image_url)}">` : (isAgency()?"+ Agregar foto":"Sin contenido todavía")}
-    </button>`);
-  }
+  const feed = feedItems().slice(0,12);
+  const slots = feed.map(it => `<button class="grid-slot" data-action="feed-view" data-id="${it.id}">
+    ${it.media_url ? `<img src="${esc(it.media_url)}">` : `<span style="padding:4px;">${esc(it.title||"")}</span>`}
+    <span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}" style="position:absolute;top:5px;right:5px;width:9px;height:9px;margin:0;border:1.5px solid #fff;"></span>
+  </button>`);
   return `
   <div class="profile-row">
     <button class="avatar" data-action="${isAgency()?'edit-profile':''}">${c&&c.avatar_url?`<img src="${esc(c.avatar_url)}">`:(c?esc((c.name||"?").charAt(0).toUpperCase()):"?")}</button>
@@ -567,13 +616,8 @@ function renderInstagramTab(){
     ${hls.map(h=>`<button class="hl-item" data-action="view-story" data-hid="${h.id}"><span class="hl-circle-wrap"><span class="hl-circle">${h.image_url?`<img src="${esc(h.image_url)}">`:"✦"}</span>${STATUS_DOT_CLASS[h.status]?`<span class="hl-dot ${STATUS_DOT_CLASS[h.status]}"></span>`:""}</span><span class="hl-label">${esc(h.label)}</span></button>`).join("")}
     ${isAgency()?`<button class="hl-item" data-action="highlight-new"><span class="hl-circle" style="border:1px dashed var(--accent-strong);color:var(--accent-strong);">+</span><span class="hl-label">Nueva</span></button>`:""}
   </div>
-  <div class="topbar-row" style="padding-top:12px;margin-bottom:6px;">
-    <button class="btn btn-ghost btn-sm" data-action="month-prev">‹</button>
-    <div style="flex:1;text-align:center;font-weight:600;font-size:14px;text-transform:capitalize;">${MONTHS[state.month.getMonth()]} ${state.month.getFullYear()}</div>
-    <button class="btn btn-ghost btn-sm" data-action="month-next">›</button>
-  </div>
-  ${!isAgency()?`<div style="font-size:12px;color:var(--fg-faint);margin-bottom:8px;">Solo la agencia puede cargar fotos.</div>`:""}
-  <div class="grid3">${slots.join("")}</div>
+  <div class="field-label" style="margin:14px 0 8px;">Grilla (se arma sola con lo que cargás en el Calendario)</div>
+  ${feed.length===0?`<div class="loading-text">Todavía no hay publicaciones de feed cargadas en el Calendario.</div>`:`<div class="grid3">${slots.join("")}</div>`}
   `;
 }
 async function saveClientProfile(){
@@ -636,40 +680,6 @@ async function deleteStory(storyId, highlightId){
   const h = state.highlights.find(x=>x.id===highlightId);
   await trashRow("highlight_stories", storyId, viewerName(), {clientId:state.clientId, entityType:"Historia de destacada", label:"Historia de "+(h?h.label:"destacada")});
 }
-async function gridStatusChange(pos, status){
-  const g = state.gridItems.find(x=>x.position===pos);
-  if (!g) return;
-  try{
-    await setApprovalStatus("grid_items", g.id, status);
-    await logActivity({clientId:state.clientId, action:"update", entityType:"Publicación de Instagram", label:`Publicación ${pos} → ${STATUS_LABEL[status]}`, byName:viewerName()});
-    render();
-  }catch(e){ alert("No se pudo guardar: "+e.message); }
-}
-async function saveGridItem(pos){
-  const caption = val("grid-caption").trim();
-  const isReel = checked("grid-isreel");
-  const reelLink = val("grid-reellink").trim();
-  const f = file0("grid-image");
-  const existing = state.gridItems.find(x=>x.position===pos);
-  setSheetBusy(true);
-  try{
-    const patch = {client_id:state.clientId, month_key: monthKey(state.month), position:pos, caption, is_reel:isReel, reel_link: isReel?reelLink:"", status: existing?existing.status:"borrador", updated_at: new Date().toISOString()};
-    if (f){ const {url,path} = await uploadMedia(`grid/${state.clientId}/${monthKey(state.month)}-${pos}-${Date.now()}-${safeFileName(f.name)}`, f); patch.image_url=url; patch.image_path=path; }
-    if (existing){ const {error} = await sb.from("grid_items").update(patch).eq("id", existing.id); if (error) throw error; }
-    else { const {error} = await sb.from("grid_items").insert(patch); if (error) throw error; }
-    await logActivity({clientId:state.clientId, action: existing?"update":"create", entityType:"Publicación de Instagram", label:`Publicación ${pos}`, byName:"Agencia"});
-    closeSheet();
-  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
-  finally{ setSheetBusy(false); }
-}
-async function deleteGridItem(pos){
-  const g = state.gridItems.find(x=>x.position===pos);
-  if (!g) return;
-  if (!confirm("¿Eliminar esta publicación?")) return;
-  await trashRow("grid_items", g.id, viewerName(), {clientId:state.clientId, entityType:"Publicación de Instagram", label:`Publicación ${pos}`});
-  closeSheet();
-}
-
 /* ===================== BRAND ===================== */
 async function loadBrand(){
   const {data} = await sb.from("brand_files").select("*").eq("client_id", state.clientId).is("deleted_at", null).order("created_at", {ascending:false});
@@ -833,7 +843,7 @@ async function loadHistory(){
 function labelFor(table,row){
   switch(table){
     case "calendar_items": return row.title || "(sin título)";
-    case "grid_items": return "Publicación "+row.position;
+    case "item_images": return "Imagen de carrusel";
     case "highlights": return row.label || "(sin nombre)";
     case "highlight_stories": return "Historia";
     case "brand_files": return row.label || row.file_name || "(archivo)";
@@ -887,8 +897,7 @@ function renderSheetOverlay(){
     case "editProfile": inner = sheetEditProfile(); break;
     case "highlightEdit": inner = sheetHighlightEdit(s); break;
     case "storyViewer": inner = sheetStoryViewer(s); wide=false; break;
-    case "gridEdit": inner = sheetGridEdit(s); break;
-    case "gridView": inner = sheetGridView(s); break;
+    case "feedView": inner = sheetFeedView(s); break;
     case "campaignEdit": inner = sheetCampaignEdit(s); break;
     case "campaignView": inner = sheetCampaignView(s); wide=true; break;
     case "creativeAdd": inner = sheetCreativeAdd(s); break;
@@ -914,8 +923,9 @@ function sheetDay(s){
     <div class="field"><input class="input" id="new-item-title" placeholder="Título"></div>
     <div class="field"><select class="select" id="new-item-format">${FORMATS.map(f=>`<option>${f}</option>`).join("")}</select></div>
     <div class="field"><textarea class="textarea" id="new-item-desc" rows="7" placeholder="Guion, idea, detalle…"></textarea></div>
+    <div class="field"><div class="field-label">Imagen o video (opcional)</div><input type="file" accept="image/*,video/*" id="new-item-media"></div>
     ${sheetMsgHTML()}
-    <button class="btn btn-accent btn-block" data-action="new-item-save" data-date="${s.date}">Agregar</button>
+    <button class="btn btn-accent btn-block" data-action="new-item-save" data-date="${s.date}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
   </div>` : ""}`;
 }
 function sheetEditProfile(){
@@ -985,37 +995,59 @@ function sheetStoryViewer(s){
     <button class="btn btn-accent btn-sm" data-action="highlight-comment" data-id="${h.id}">Enviar</button>
   </div>`;
 }
-function sheetGridEdit(s){
-  const g = state.gridItems.find(x=>x.position===s.pos);
-  return `${headHTML("Publicación "+s.pos)}
-  <div class="field"><div class="field-label">Foto o portada del reel</div><input type="file" accept="image/*" id="grid-image"></div>
-  <div class="field"><div class="field-label">Copy / texto del posteo</div><textarea class="textarea" id="grid-caption" rows="3">${esc(g?g.caption:'')}</textarea></div>
-  <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px;"><input type="checkbox" id="grid-isreel" ${g&&g.is_reel?"checked":""}> Es un Reel</label>
-  <div class="field"><div class="field-label">Link del video (si es reel)</div><input class="input" id="grid-reellink" value="${esc(g?g.reel_link||'':'')}" placeholder="https://instagram.com/reel/…"></div>
-  ${sheetMsgHTML()}
-  <button class="btn btn-accent btn-block" data-action="grid-save" data-pos="${s.pos}" ${state.sheetBusy?"disabled":""}>Guardar</button>`;
-}
-function sheetGridView(s){
-  const g = state.gridItems.find(x=>x.position===s.pos);
-  if (!g) return "";
-  return `${headHTML("Publicación "+s.pos)}
-  <div style="border-radius:var(--radius-sm);overflow:hidden;background:var(--surface-3);margin-bottom:12px;display:flex;align-items:center;justify-content:center;max-height:50vh;">
-    <img src="${esc(g.image_url||'')}" style="max-height:50vh;object-fit:contain;">
+function sheetFeedView(s){
+  const it = state.calendarItems.find(x=>x.id===s.id);
+  if (!it) return "";
+  if (state.sheet.editingId === it.id) return itemEditFormHTML(it);
+  const extra = state.itemImages[it.id]||[];
+  const slides = (it.media_url ? [{image_url:it.media_url}] : []).concat(extra);
+  const idx = Math.max(0, Math.min(s.idx||0, Math.max(slides.length-1,0)));
+  const cur = slides[idx];
+  const cs = state.comments[it.id] || [];
+  return `${headHTML(it.title||"Publicación")}
+  ${slides.length ? `
+  ${slides.length>1?`<div class="story-progress">${slides.map((_,i)=>`<span class="${i<=idx?'on':''}"></span>`).join("")}</div>`:""}
+  <div class="story-img-wrap">
+    <img src="${esc(cur.image_url||'')}">
+    ${slides.length>1?`<button class="story-tap" style="left:0;" data-action="feed-slide-prev" data-idx="${idx}"></button><button class="story-tap" style="right:0;" data-action="feed-slide-next" data-idx="${idx}" data-max="${slides.length-1}"></button>`:""}
+    <button class="story-zoom-btn" data-action="story-zoom" title="Ampliar">⤢</button>
   </div>
+  ${s.zoomed?`<div class="story-zoom-overlay" data-action="story-zoom-close"><img src="${esc(cur.image_url||'')}"></div>`:""}` :
+  `<div class="loading-text" style="margin-bottom:10px;">Sin imagen cargada todavía.</div>`}
+  <div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">
+    ${it.format?`<span class="badge ${FORMAT_CLASS[it.format]||'b-borrador'}">${esc(it.format)}</span>`:""}
+    ${slides.length>1?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">Carrusel · ${slides.length}</span>`:""}
+    <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
+  </div>
+  ${it.date?`<div style="font-size:12px;color:var(--fg-faint);margin-bottom:6px;text-transform:capitalize;">${new Date(it.date+"T00:00:00").toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"})}</div>`:""}
+  ${it.description ? `<div style="font-size:14px;margin-bottom:8px;white-space:pre-wrap;">${esc(it.description)}</div>`:""}
+  ${it.format==="Reel"&&it.reel_link?`<a href="${esc(it.reel_link)}" target="_blank" style="display:block;margin-bottom:8px;text-decoration:underline;">${esc(it.reel_link)}</a>`:""}
   <div class="row-gap" style="margin-bottom:8px;">
-    ${g.is_reel?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">Reel</span>`:""}
-    <span class="badge ${STATUS_CLASS[g.status]}">${STATUS_LABEL[g.status]}</span>
+    <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
+    <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
+    ${isAgency()?`<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
+    <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>`:""}
   </div>
-  <div style="font-size:14px;margin-bottom:8px;white-space:pre-wrap;${g.caption?'':'color:var(--fg-faint);font-style:italic;'}">${esc(g.caption||'Sin copy cargado todavía.')}</div>
-  ${g.is_reel&&g.reel_link?`<a href="${esc(g.reel_link)}" target="_blank" style="display:block;margin-bottom:8px;text-decoration:underline;">${esc(g.reel_link)}</a>`:""}
-  <div class="row-gap" style="margin-bottom:8px;">
-    <button class="btn" data-action="grid-status" data-pos="${s.pos}" data-status="aprobado">✓ Aprobar</button>
-    <button class="btn" data-action="grid-status" data-pos="${s.pos}" data-status="cambios">Pedir cambios</button>
-  </div>
-  ${isAgency()?`<div class="row-gap">
-    <button class="btn" data-action="grid-edit-open" data-pos="${s.pos}">Editar</button>
-    <button class="btn btn-danger" data-action="grid-delete" data-pos="${s.pos}">Eliminar publicación</button>
-  </div>`:""}`;
+  ${isAgency()?`<div style="margin-bottom:12px;">
+    <div class="field-label">Imágenes del carrusel (además de la portada)</div>
+    <div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">
+      ${extra.length===0?`<div style="font-size:12px;color:var(--fg-faint);">Sin imágenes extra todavía</div>`:
+        extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">
+          <img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;">
+          <span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>
+          <button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>
+        </div>`).join("")}
+    </div>
+    <div class="row-gap">
+      <input type="file" accept="image/*" id="item-carousel-file" multiple style="flex:1;">
+      <button class="btn btn-sm" data-action="item-image-add" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
+    </div>
+  </div>`:""}
+  ${cs.map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("")}
+  <div style="display:flex;gap:6px;margin-top:8px;">
+    <input class="input" style="flex:1;" placeholder="Escribir un comentario…" id="comment-input-${it.id}" />
+    <button class="btn btn-accent btn-sm" data-action="item-comment" data-id="${it.id}">Enviar</button>
+  </div>`;
 }
 function sheetCampaignEdit(s){
   const c = s.id ? state.adCampaigns.find(x=>x.id===s.id) : null;
@@ -1212,12 +1244,11 @@ document.addEventListener("click", async (e) => {
   if (a === "story-zoom-close"){ state.sheet.zoomed = false; render(); return; }
   if (a === "story-add"){ await addStory(el.dataset.hid); return; }
   if (a === "story-delete"){ await deleteStory(el.dataset.sid, el.dataset.hid); return; }
-  if (a === "grid-edit"){ openSheet("gridEdit", {pos: parseInt(el.dataset.pos)}); return; }
-  if (a === "grid-view"){ openSheet("gridView", {pos: parseInt(el.dataset.pos)}); return; }
-  if (a === "grid-edit-open"){ openSheet("gridEdit", {pos: parseInt(el.dataset.pos)}); return; }
-  if (a === "grid-save"){ await saveGridItem(parseInt(el.dataset.pos)); return; }
-  if (a === "grid-status"){ await gridStatusChange(parseInt(el.dataset.pos), el.dataset.status); return; }
-  if (a === "grid-delete"){ await deleteGridItem(parseInt(el.dataset.pos)); return; }
+  if (a === "feed-view"){ openSheet("feedView", {id: el.dataset.id}); return; }
+  if (a === "feed-slide-prev"){ const idx=Math.max(0, parseInt(el.dataset.idx)-1); state.sheet.idx=idx; render(); return; }
+  if (a === "feed-slide-next"){ const max=parseInt(el.dataset.max); const idx=Math.min(max, parseInt(el.dataset.idx)+1); state.sheet.idx=idx; render(); return; }
+  if (a === "item-image-add"){ await addItemImages(el.dataset.id); return; }
+  if (a === "item-image-delete"){ await deleteItemImage(el.dataset.id); return; }
   if (a === "brand-delete"){ await brandDelete(el.dataset.id); return; }
   if (a === "ads-platform"){ state.adsPlatform = el.dataset.platform; render(); return; }
   if (a === "campaign-new"){ openSheet("campaignEdit", {id:null, platform: state.adsPlatform}); return; }
