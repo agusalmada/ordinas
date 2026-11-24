@@ -58,7 +58,7 @@ a{color:var(--accent-strong);}
 @media(min-width:640px){.overlay{align-items:center;}}
 .sheet{width:100%;max-width:420px;max-height:92vh;overflow-y:auto;background:var(--surface);border-radius:18px 18px 0 0;padding:20px;}
 @media(min-width:640px){.sheet{border-radius:18px;}}
-.sheet.wide{max-width:560px;}
+.sheet.wide{max-width:640px;}
 .sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
 .sheet-title{font-size:18px;font-weight:600;}
 .x-btn{flex-shrink:0;width:32px;height:32px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg-dim);cursor:pointer;font-size:16px;}
@@ -120,6 +120,15 @@ a{color:var(--accent-strong);}
 .comment{border-top:1px solid var(--line);padding-top:8px;margin-top:8px;font-size:13px;}
 .comment b{font-size:12px;}
 .comment .when{font-size:10px;color:var(--fg-faint);}
+.cc-wrap{display:flex;flex-direction:column;}
+.cc-side .comment:first-child{border-top:none;padding-top:0;margin-top:0;}
+@media(min-width:720px){
+  .cc-wrap{flex-direction:row;align-items:flex-start;gap:16px;}
+  .cc-main{flex:1;min-width:0;}
+  .cc-side{width:220px;flex-shrink:0;border-left:1px solid var(--line);padding-left:14px;display:flex;flex-direction:column;max-height:420px;}
+  .cc-side .cc-list{overflow-y:auto;flex:1;min-height:0;}
+  .cc-side .cc-input-row{margin-top:8px;flex-shrink:0;}
+}
 .file-label{font-size:12px;color:var(--accent-strong);cursor:pointer;}
 </style>
 </head>
@@ -185,6 +194,17 @@ function fmtWhen(iso){
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
 function safeFileName(name){ return name.replace(/[^a-zA-Z0-9._-]+/g,"-").slice(-80); }
+function commentsPanelHTML(comments, {inputId, action, dataId, placeholder}){
+  return `<div class="cc-side">
+    <div class="cc-list">
+      ${comments.length ? comments.map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("") : `<div style="font-size:12px;color:var(--fg-faint);">Sin comentarios todavía</div>`}
+    </div>
+    <div class="cc-input-row" style="display:flex;gap:6px;">
+      <input class="input" style="flex:1;" placeholder="${esc(placeholder)}" id="${inputId}" />
+      <button class="btn btn-accent btn-sm" data-action="${action}" data-id="${dataId}">Enviar</button>
+    </div>
+  </div>`;
+}
 function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
 function daysInMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); }
 function mondayIndex(jsDay){ return (jsDay+6)%7; }
@@ -446,6 +466,8 @@ function itemCardHTML(it){
   const cs = state.comments[it.id] || [];
   return `
   <div class="card">
+    <div class="cc-wrap">
+    <div class="cc-main">
     <div class="row-gap" style="justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
       <div>
         <div style="font-weight:600;font-size:14px;">${esc(it.title)}</div>
@@ -461,10 +483,8 @@ function itemCardHTML(it){
       ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
       <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
     </div>
-    ${cs.map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("")}
-    <div style="display:flex;gap:6px;margin-top:8px;">
-      <input class="input" style="flex:1;" placeholder="Escribir un comentario…" id="comment-input-${it.id}" />
-      <button class="btn btn-accent btn-sm" data-action="item-comment" data-id="${it.id}">Enviar</button>
+    </div>
+    ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
     </div>
   </div>`;
 }
@@ -893,11 +913,11 @@ function renderSheetOverlay(){
   let inner = "";
   let wide = false;
   switch(s.type){
-    case "day": inner = sheetDay(s); break;
+    case "day": inner = sheetDay(s); wide=true; break;
     case "editProfile": inner = sheetEditProfile(); break;
     case "highlightEdit": inner = sheetHighlightEdit(s); break;
-    case "storyViewer": inner = sheetStoryViewer(s); wide=false; break;
-    case "feedView": inner = sheetFeedView(s); break;
+    case "storyViewer": inner = sheetStoryViewer(s); wide=true; break;
+    case "feedView": inner = sheetFeedView(s); wide=true; break;
     case "campaignEdit": inner = sheetCampaignEdit(s); break;
     case "campaignView": inner = sheetCampaignView(s); wide=true; break;
     case "creativeAdd": inner = sheetCreativeAdd(s); break;
@@ -973,6 +993,8 @@ function sheetStoryViewer(s){
   }
   const st = stories[idx];
   return `${headHTML(h.label)}
+  <div class="cc-wrap">
+  <div class="cc-main">
   <div class="story-progress">${stories.map((_,i)=>`<span class="${i<=idx?'on':''}"></span>`).join("")}</div>
   <div class="story-img-wrap">
     <img src="${esc(st.image_url||'')}">
@@ -989,10 +1011,8 @@ function sheetStoryViewer(s){
     <button class="btn btn-ghost" data-action="highlight-edit-open" data-id="${h.id}">Editar destacada</button>
     <button class="btn btn-danger" data-action="story-delete" data-sid="${st.id}" data-hid="${h.id}">Eliminar esta historia</button>
   </div>`:""}
-  ${(state.highlightComments[h.id]||[]).map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("")}
-  <div style="display:flex;gap:6px;margin-top:8px;">
-    <input class="input" style="flex:1;" placeholder="Escribir qué cambio pedís…" id="hcomment-input-${h.id}" />
-    <button class="btn btn-accent btn-sm" data-action="highlight-comment" data-id="${h.id}">Enviar</button>
+  </div>
+  ${commentsPanelHTML(state.highlightComments[h.id]||[], {inputId:`hcomment-input-${h.id}`, action:"highlight-comment", dataId:h.id, placeholder:"Escribir qué cambio pedís…"})}
   </div>`;
 }
 function sheetFeedView(s){
@@ -1005,6 +1025,8 @@ function sheetFeedView(s){
   const cur = slides[idx];
   const cs = state.comments[it.id] || [];
   return `${headHTML(it.title||"Publicación")}
+  <div class="cc-wrap">
+  <div class="cc-main">
   ${slides.length ? `
   ${slides.length>1?`<div class="story-progress">${slides.map((_,i)=>`<span class="${i<=idx?'on':''}"></span>`).join("")}</div>`:""}
   <div class="story-img-wrap">
@@ -1043,10 +1065,8 @@ function sheetFeedView(s){
       <button class="btn btn-sm" data-action="item-image-add" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
     </div>
   </div>`:""}
-  ${cs.map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("")}
-  <div style="display:flex;gap:6px;margin-top:8px;">
-    <input class="input" style="flex:1;" placeholder="Escribir un comentario…" id="comment-input-${it.id}" />
-    <button class="btn btn-accent btn-sm" data-action="item-comment" data-id="${it.id}">Enviar</button>
+  </div>
+  ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
   </div>`;
 }
 function sheetCampaignEdit(s){
