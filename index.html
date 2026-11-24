@@ -14,6 +14,7 @@
   --accent:#ddf26a; --accent-ink:#1d1f14; --accent-strong:#59680f; --accent-soft:#eef7cf;
   --ok:#2f7d3c; --ok-soft:#e3f3e3; --warn:#9a6b11; --warn-soft:#fbedcf;
   --bad:#b23b3b; --bad-soft:#fae3e3; --radius:18px; --radius-sm:12px;
+  --info:#3461c1; --info-soft:#e3ebfa; --done:#147d6b; --done-soft:#d9f3ee;
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'Outfit',system-ui,sans-serif;min-height:100%;}
@@ -46,6 +47,9 @@ a{color:var(--accent-strong);}
 .b-pendiente{background:var(--warn-soft);color:var(--warn);}
 .b-aprobado{background:var(--ok-soft);color:var(--ok);}
 .b-cambios{background:var(--bad-soft);color:var(--bad);}
+.b-en-produccion{background:var(--info-soft);color:var(--info);}
+.b-prod-pendiente{background:var(--info-soft);color:var(--info);}
+.b-prod-listo{background:var(--done-soft);color:var(--done);font-weight:600;}
 .b-reel{background:#f3e0fa;color:#8a2fb8;}
 .b-post{background:#dbeafe;color:#1d5fc9;}
 .b-carrusel{background:#ffe8cc;color:#b8630f;}
@@ -85,6 +89,8 @@ a{color:var(--accent-strong);}
 .status-dot{display:inline-block;width:6px;height:6px;border-radius:999px;margin-right:4px;flex-shrink:0;vertical-align:middle;}
 .status-dot-ok{background:var(--ok);}
 .status-dot-bad{background:var(--bad);}
+.status-dot-info{background:var(--info);}
+.status-dot-done{background:var(--done);}
 .status-dot-neutral{background:#9a9a90;}
 .dots{display:flex;gap:2px;}
 .dot{width:5px;height:5px;border-radius:999px;}
@@ -171,6 +177,20 @@ const FORMAT_CLASS = {Reel:"b-reel",Post:"b-post",Carrusel:"b-carrusel",Story:"b
 const STATUS_DOT_CLASS = {aprobado:"status-dot-ok",cambios:"status-dot-bad",pendiente:"status-dot-neutral",borrador:"status-dot-neutral"};
 const STATUS_LABEL = {borrador:"Borrador",pendiente:"Pendiente",aprobado:"Aprobado",cambios:"Pide cambios"};
 const STATUS_CLASS = {borrador:"b-borrador",pendiente:"b-pendiente",aprobado:"b-aprobado",cambios:"b-cambios"};
+const PROD_STATUS_LABEL = {pendiente:"Para aprobar", aprobado:"✓ Listo para publicar", cambios:"Pide cambios"};
+const PROD_STATUS_CLASS = {pendiente:"b-prod-pendiente", aprobado:"b-prod-listo", cambios:"b-cambios"};
+function itemStageInfo(it){
+  const extra = state.itemImages[it.id] || [];
+  const hasProd = !!(it.media_url || it.story_media_url || it.final_copy || extra.length);
+  if (it.status !== "aprobado"){
+    return {phase:"idea", hasProd, label: STATUS_LABEL[it.status], badgeClass: STATUS_CLASS[it.status], dotClass: STATUS_DOT_CLASS[it.status] || "status-dot-neutral"};
+  }
+  if (!hasProd){
+    return {phase:"waiting", hasProd, label:"En producción", badgeClass:"b-en-produccion", dotClass:"status-dot-info"};
+  }
+  const ps = it.prod_status || "pendiente";
+  return {phase:"prod", hasProd, label: PROD_STATUS_LABEL[ps], badgeClass: PROD_STATUS_CLASS[ps], dotClass: ps==="cambios"?"status-dot-bad":ps==="aprobado"?"status-dot-done":"status-dot-info"};
+}
 const BRAND_CATEGORIES = ["Plan de marketing","Brief","Logos","Manual de marca","Stock (imágenes y videos)"];
 const META_CAMPAIGN_TYPES = ["Mensajes","Interacción"];
 const GOOGLE_CAMPAIGN_TYPES = ["Search","Performance Max"];
@@ -267,8 +287,9 @@ async function purgeRow(table, id, byName, opts){
   await sb.from(table).delete().eq("id", id);
   await logActivity({clientId:opts.clientId, action:"purge", entityType:opts.entityType, label:opts.label, byName, collection:table, docId:id});
 }
-async function setApprovalStatus(table, id, status){
-  const {data, error} = await sb.from(table).update({status}).eq("id", id).select("id");
+async function setApprovalStatus(table, id, status, column){
+  column = column || "status";
+  const {data, error} = await sb.from(table).update({[column]: status}).eq("id", id).select("id");
   if (error) throw error;
   if (!data || data.length === 0) throw new Error("Supabase no dejó guardar el cambio (revisá que exista una política de UPDATE para la tabla \""+table+"\").");
 }
@@ -298,7 +319,7 @@ function render(){
   } else {
     html = renderShell();
   }
-  app.innerHTML = html + (state.sheet ? renderSheetOverlay() : "");
+  app.innerHTML = html + (state.sheet ? renderSheetOverlay() : "") + (state.zoomImageUrl ? `<div class="story-zoom-overlay" data-action="img-zoom-close"><img src="${esc(state.zoomImageUrl)}"></div>` : "");
   attachDynamicListeners();
 }
 
@@ -445,7 +466,7 @@ function renderCalendarTab(){
     const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const items = state.calendarItems.filter(it => it.date === key);
     const shown = items.slice(0,2);
-    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':it.kind==='story'?'chip-story':'chip-idea'}"${isAgency()?` draggable="true" data-drag-id="${it.id}"`:""}><span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}"></span>${esc(it.title||(it.kind==='event'?'Evento':it.kind==='story'?'Historia':'Idea'))}</span>`).join("");
+    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':it.kind==='story'?'chip-story':'chip-idea'}"${isAgency()?` draggable="true" data-drag-id="${it.id}"`:""}><span class="status-dot ${itemStageInfo(it).dotClass}"></span>${esc(it.title||(it.kind==='event'?'Evento':it.kind==='story'?'Historia':'Idea'))}</span>`).join("");
     if (items.length > 2) chipsHtml += `<span class="chip-more">+${items.length-2} más</span>`;
     cells += `<button class="day-cell${key===todayKey?' today':''}" data-action="open-day" data-date="${key}" data-drop-date="${key}"><span class="day-num">${d}</span><span class="day-chips">${chipsHtml}</span></button>`;
   }
@@ -470,6 +491,8 @@ function itemCardHTML(it){
   const extra = state.itemImages[it.id] || [];
   const hasProd = !!(it.media_url || it.story_media_url || it.final_copy || extra.length);
   const editingProd = isAgency() && state.sheet && state.sheet.editingProdId === it.id;
+  const stage = itemStageInfo(it);
+  const approveAction = stage.phase === "prod" ? "item-prod-status" : "item-status";
   return `
   <div class="card">
     <div class="cc-wrap">
@@ -479,12 +502,12 @@ function itemCardHTML(it){
         <div style="font-weight:600;font-size:14px;">${esc(it.title)}</div>
         <div style="font-size:12px;color:var(--fg-faint);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${it.kind==="event"?"Fecha especial":"Idea de contenido"}${it.format?`<span class="badge ${FORMAT_CLASS[it.format]||"b-borrador"}">${esc(it.format)}</span>`:""}</div>
       </div>
-      <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
+      <span class="badge ${stage.badgeClass}">${stage.label}</span>
     </div>
     ${it.description ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.description)}</div>` : ""}
     <div class="row-gap" style="margin-bottom:6px;">
-      <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
-      <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
+      ${stage.phase !== "waiting" ? `<button class="btn btn-sm" data-action="${approveAction}" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
+      <button class="btn btn-sm" data-action="${approveAction}" data-id="${it.id}" data-status="cambios">Pedir cambios</button>` : ""}
       ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
       <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
     </div>
@@ -502,17 +525,21 @@ function productionBlockHTML(it, opts){
   const showForm = !hasProd || editingProd;
 
   if (!showForm){
+    const stage = itemStageInfo(it);
     return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
-      <div class="field-label" style="margin-bottom:8px;">Producción</div>
+      <div class="row-gap" style="justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div class="field-label" style="margin-bottom:0;">Producción</div>
+        <span class="badge ${stage.badgeClass}">${stage.label}</span>
+      </div>
       ${it.media_url || extra.length ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Feed</div>
       ${it.media_url ? `<div style="position:relative;margin-bottom:8px;">
-        ${it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`}
+        ${it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" data-action="img-zoom" data-url="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;cursor:zoom-in;">`}
         ${isAgency()?`<button data-action="item-media-clear" data-id="${it.id}" data-which="feed" title="Borrar imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
       </div>` : ""}
-      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);"><img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>${isAgency()?`<button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>`:""}</div>`).join("")}</div>`:""}` : ""}
+      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);"><img src="${esc(im.image_url||'')}" data-action="img-zoom" data-url="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>${isAgency()?`<button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>`:""}</div>`).join("")}</div>`:""}` : ""}
       ${it.story_media_url ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Historia</div>
       <div style="position:relative;margin-bottom:8px;">
-        ${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>`:`<img src="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`}
+        ${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>`:`<img src="${esc(it.story_media_url)}" data-action="img-zoom" data-url="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;cursor:zoom-in;">`}
         ${isAgency()?`<button data-action="item-media-clear" data-id="${it.id}" data-which="story" title="Borrar imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
       </div>`:""}
       ${it.final_copy ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : ""}
@@ -671,7 +698,18 @@ async function itemStatusChange(id, status){
   try {
     const it = state.calendarItems.find(i=>i.id===id);
     await setApprovalStatus("calendar_items", id, status);
+    if (it) it.status = status;
     if (it) await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":it.kind==="story"?"Historia":"Idea de contenido", label:`${it.title} → ${STATUS_LABEL[status]}`, byName:viewerName()});
+    render();
+  } catch(e){ alert("No se pudo guardar: "+e.message); }
+}
+async function itemProdStatusChange(id, status){
+  try {
+    const it = state.calendarItems.find(i=>i.id===id);
+    await setApprovalStatus("calendar_items", id, status, "prod_status");
+    if (it) it.prod_status = status;
+    if (it) await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it.title} → Producción: ${PROD_STATUS_LABEL[status]}`, byName:viewerName()});
+    render();
   } catch(e){ alert("No se pudo guardar: "+e.message); }
 }
 async function itemAddComment(id){
@@ -737,7 +775,7 @@ function renderInstagramTab(){
   const slots = feed.map(it => `<span style="position:relative;display:block;">
     <button class="grid-slot" style="display:block;width:100%;" data-action="feed-view" data-id="${it.id}">
       ${it.media_url ? `<img src="${esc(it.media_url)}">` : `<span style="padding:4px;">${esc(it.title||"")}</span>`}
-      <span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}" style="position:absolute;top:5px;right:5px;width:9px;height:9px;margin:0;border:1.5px solid #fff;"></span>
+      <span class="status-dot ${itemStageInfo(it).dotClass}" style="position:absolute;top:5px;right:5px;width:9px;height:9px;margin:0;border:1.5px solid #fff;"></span>
     </button>
     ${isAgency()?`<button data-action="item-delete" data-id="${it.id}" title="Eliminar" style="position:absolute;top:5px;left:5px;width:18px;height:18px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:11px;line-height:18px;cursor:pointer;">×</button>`:""}
   </span>`);
@@ -1144,6 +1182,8 @@ function sheetFeedView(s){
   const extra = state.itemImages[it.id]||[];
   const hasProd = !!(it.media_url || it.story_media_url || it.final_copy || extra.length);
   const editingProd = isAgency() && state.sheet && state.sheet.editingProdId === it.id;
+  const stage = itemStageInfo(it);
+  const approveAction = stage.phase === "prod" ? "item-prod-status" : "item-status";
   const slides = (it.media_url ? [{image_url:it.media_url}] : []).concat(extra);
   const idx = Math.max(0, Math.min(s.idx||0, Math.max(slides.length-1,0)));
   const cur = slides[idx];
@@ -1163,14 +1203,14 @@ function sheetFeedView(s){
   <div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">
     ${it.format?`<span class="badge ${FORMAT_CLASS[it.format]||'b-borrador'}">${esc(it.format)}</span>`:""}
     ${slides.length>1?`<span class="badge" style="background:var(--surface-3);color:var(--fg-dim);">Carrusel · ${slides.length}</span>`:""}
-    <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
+    <span class="badge ${stage.badgeClass}">${stage.label}</span>
   </div>
   ${it.date?`<div style="font-size:12px;color:var(--fg-faint);margin-bottom:6px;text-transform:capitalize;">${new Date(it.date+"T00:00:00").toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"})}</div>`:""}
   ${it.final_copy ? `<div style="font-size:14px;margin-bottom:8px;white-space:pre-wrap;">${esc(it.final_copy)}</div>`:""}
   ${it.format==="Reel"&&it.reel_link?`<a href="${esc(it.reel_link)}" target="_blank" style="display:block;margin-bottom:8px;text-decoration:underline;">${esc(it.reel_link)}</a>`:""}
   <div class="row-gap" style="margin-bottom:8px;">
-    <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
-    <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
+    ${stage.phase !== "waiting" ? `<button class="btn btn-sm" data-action="${approveAction}" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
+    <button class="btn btn-sm" data-action="${approveAction}" data-id="${it.id}" data-status="cambios">Pedir cambios</button>` : ""}
     ${isAgency()?`<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar idea</button>
     ${hasProd?`<button class="btn btn-sm btn-ghost" data-action="item-prod-edit" data-id="${it.id}">Editar producción</button>`:""}
     <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>`:""}
@@ -1347,6 +1387,7 @@ document.addEventListener("click", async (e) => {
   if (a === "new-item-kind"){ state.sheet.newKind = el.dataset.kind; state.sheetMsg=""; render(); return; }
   if (a === "new-item-save"){ await submitNewItem(el.dataset.date); return; }
   if (a === "item-status"){ await itemStatusChange(el.dataset.id, el.dataset.status); return; }
+  if (a === "item-prod-status"){ await itemProdStatusChange(el.dataset.id, el.dataset.status); return; }
   if (a === "item-comment"){ await itemAddComment(el.dataset.id); return; }
   if (a === "item-edit"){ state.sheet.editingId = el.dataset.id; state.sheetMsg=""; render(); return; }
   if (a === "item-edit-save"){ await itemEditSave(el.dataset.id); return; }
@@ -1368,6 +1409,8 @@ document.addEventListener("click", async (e) => {
   if (a === "story-next"){ const max=parseInt(el.dataset.max); const idx=Math.min(max, parseInt(el.dataset.idx)+1); state.sheet.idx=idx; render(); return; }
   if (a === "story-zoom"){ state.sheet.zoomed = true; render(); return; }
   if (a === "story-zoom-close"){ state.sheet.zoomed = false; render(); return; }
+  if (a === "img-zoom"){ state.zoomImageUrl = el.dataset.url; render(); return; }
+  if (a === "img-zoom-close"){ state.zoomImageUrl = null; render(); return; }
   if (a === "story-add"){ await addStory(el.dataset.hid); return; }
   if (a === "story-delete"){ await deleteStory(el.dataset.sid, el.dataset.hid); return; }
   if (a === "feed-view"){ openSheet("feedView", {id: el.dataset.id}); return; }
