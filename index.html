@@ -467,6 +467,38 @@ function dayItemsHTML(date){
 function itemCardHTML(it){
   if (state.sheet && state.sheet.type === "day" && state.sheet.editingId === it.id) return itemEditFormHTML(it);
   const cs = state.comments[it.id] || [];
+  const extra = state.itemImages[it.id] || [];
+  const hasProd = !!(it.media_url || it.story_media_url || it.final_copy || extra.length);
+  const editingProd = isAgency() && state.sheet && state.sheet.editingProdId === it.id;
+  if (hasProd && !editingProd){
+    return `
+    <div class="card">
+      <div class="cc-wrap">
+      <div class="cc-main">
+      <div class="row-gap" style="justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+        <div>
+          <div style="font-weight:600;font-size:14px;">${esc(it.title)}</div>
+          <div style="font-size:12px;color:var(--fg-faint);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${it.kind==="event"?"Fecha especial":"Idea de contenido"}${it.format?`<span class="badge ${FORMAT_CLASS[it.format]||"b-borrador"}">${esc(it.format)}</span>`:""}</div>
+        </div>
+        <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
+      </div>
+      ${it.media_url || extra.length ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Feed</div>
+      ${it.media_url ? (it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;object-fit:cover;">`) : ""}
+      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);"><img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span></div>`).join("")}</div>`:""}` : ""}
+      ${it.story_media_url ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Historia</div>
+      ${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;"></video>`:`<img src="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;object-fit:cover;">`}`:""}
+      ${it.final_copy ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : ""}
+      <div class="row-gap" style="margin-bottom:6px;">
+        <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
+        <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
+        ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-prod-edit" data-id="${it.id}">Editar producción</button>
+        <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
+      </div>
+      </div>
+      ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
+      </div>
+    </div>`;
+  }
   return `
   <div class="card">
     <div class="cc-wrap">
@@ -485,24 +517,18 @@ function itemCardHTML(it){
       ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
       <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
     </div>
-    ${productionBlockHTML(it)}
+    ${(it.status === "aprobado" || editingProd) ? productionBlockHTML(it, editingProd) : ""}
     </div>
     ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
     </div>
   </div>`;
 }
-function productionBlockHTML(it){
+function productionBlockHTML(it, showCancel){
   const extra = state.itemImages[it.id] || [];
-  const hasProd = it.media_url || it.story_media_url || it.final_copy || extra.length;
-  if (it.status !== "aprobado" && !hasProd) return "";
   if (!isAgency()){
     return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
       <div class="field-label" style="margin-bottom:8px;">Producción</div>
-      ${it.final_copy ? `<div style="font-size:13px;white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : `<div style="font-size:12px;color:var(--fg-faint);margin-bottom:8px;">Todavía no se cargó el copy final.</div>`}
-      <div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin:10px 0 6px;">Feed</div>
-      ${it.media_url ? (it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`) : `<div style="font-size:12px;color:var(--fg-faint);">Todavía no se cargó el archivo final.</div>`}
-      <div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin:10px 0 6px;">Historia</div>
-      ${it.story_media_url ? (it.story_media_type==="video" ? `<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`) : `<div style="font-size:12px;color:var(--fg-faint);">Todavía no se cargó el archivo para historia.</div>`}
+      <div style="font-size:12px;color:var(--fg-faint);">Todavía no se cargó el contenido final.</div>
     </div>`;
   }
   return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
@@ -535,7 +561,10 @@ function productionBlockHTML(it){
     </div>
 
     ${sheetMsgHTML()}
-    <button class="btn btn-accent btn-block" data-action="item-production-save" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Guardando…":"Guardar producción"}</button>
+    <div class="row-gap">
+      <button class="btn btn-accent" data-action="item-production-save" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Guardando…":"Guardar producción"}</button>
+      ${showCancel ? `<button class="btn btn-ghost" data-action="item-prod-edit-cancel">Cancelar</button>` : ""}
+    </div>
   </div>`;
 }
 function itemEditFormHTML(it){
@@ -563,8 +592,10 @@ async function itemEditSave(id){
   setSheetBusy(true);
   try{
     const patch = {title, format, description, reel_link: format==="Reel" && reelLinkEl ? reelLinkEl.value.trim() : ""};
-    const {error} = await sb.from("calendar_items").update(patch).eq("id", id);
+    const {data, error} = await sb.from("calendar_items").update(patch).eq("id", id).select("id");
     if (error) throw error;
+    if (!data || data.length === 0) throw new Error('Supabase no dejó guardar el cambio (revisá que exista una política de UPDATE para la tabla "calendar_items").');
+    if (it) Object.assign(it, patch);
     await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
     state.sheet.editingId = null;
     render();
@@ -581,20 +612,24 @@ async function itemProductionSave(id){
     const patch = {final_copy: finalCopy};
     if (files.length){ const f=files[0]; const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
     if (storyFile){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(storyFile.name)}`, storyFile); patch.story_media_url=url; patch.story_media_path=path; patch.story_media_type = storyFile.type&&storyFile.type.indexOf("video/")===0 ? "video" : "image"; }
-    const {error} = await sb.from("calendar_items").update(patch).eq("id", id);
+    const {data, error} = await sb.from("calendar_items").update(patch).eq("id", id).select("id");
     if (error) throw error;
+    if (!data || data.length === 0) throw new Error('Supabase no dejó guardar el cambio (revisá que exista una política de UPDATE para la tabla "calendar_items", o que ya hayas agregado las columnas story_media_url/story_media_path/story_media_type).');
+    if (it) Object.assign(it, patch);
     if (files.length > 1){
       let order = (state.itemImages[id]||[]).length;
       for (const f of files.slice(1)){
         const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f);
-        const {error:ie} = await sb.from("item_images").insert({item_id:id, client_id:state.clientId, order, image_url:url, image_path:path});
+        const {data:imgRow, error:ie} = await sb.from("item_images").insert({item_id:id, client_id:state.clientId, order, image_url:url, image_path:path}).select().single();
         if (ie) throw ie;
+        if (imgRow){ (state.itemImages[id] ||= []).push(imgRow); }
         order++;
       }
     }
     await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it?it.title:""} (producción)`, byName:viewerName()});
     const mEl = qs("prod-media-"+id); if (mEl) mEl.value="";
     const sEl = qs("prod-story-media-"+id); if (sEl) sEl.value="";
+    if (state.sheet) state.sheet.editingProdId = null;
     setSheetMsg("Producción guardada.", false);
   }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
   finally{ setSheetBusy(false); }
@@ -1096,6 +1131,8 @@ function sheetFeedView(s){
   if (!it) return "";
   if (state.sheet.editingId === it.id) return itemEditFormHTML(it);
   const extra = state.itemImages[it.id]||[];
+  const hasProd = !!(it.media_url || it.story_media_url || it.final_copy || extra.length);
+  const editingProd = isAgency() && state.sheet && state.sheet.editingProdId === it.id;
   const slides = (it.media_url ? [{image_url:it.media_url}] : []).concat(extra);
   const idx = Math.max(0, Math.min(s.idx||0, Math.max(slides.length-1,0)));
   const cur = slides[idx];
@@ -1123,10 +1160,11 @@ function sheetFeedView(s){
   <div class="row-gap" style="margin-bottom:8px;">
     <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
     <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
-    ${isAgency()?`<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
+    ${isAgency()?`<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar idea</button>
+    ${hasProd?`<button class="btn btn-sm btn-ghost" data-action="item-prod-edit" data-id="${it.id}">Editar producción</button>`:""}
     <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>`:""}
   </div>
-  ${productionBlockHTML(it)}
+  ${(editingProd || (it.status==="aprobado" && !hasProd)) ? productionBlockHTML(it, editingProd && hasProd) : ""}
   </div>
   ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
   </div>`;
@@ -1302,6 +1340,8 @@ document.addEventListener("click", async (e) => {
   if (a === "item-edit"){ state.sheet.editingId = el.dataset.id; state.sheetMsg=""; render(); return; }
   if (a === "item-edit-save"){ await itemEditSave(el.dataset.id); return; }
   if (a === "item-edit-cancel"){ state.sheet.editingId = null; state.sheetMsg=""; render(); return; }
+  if (a === "item-prod-edit"){ state.sheet.editingProdId = el.dataset.id; state.sheetMsg=""; render(); return; }
+  if (a === "item-prod-edit-cancel"){ state.sheet.editingProdId = null; state.sheetMsg=""; render(); return; }
   if (a === "item-production-save"){ await itemProductionSave(el.dataset.id); return; }
   if (a === "item-delete"){ await itemDelete(el.dataset.id); return; }
   if (a === "edit-profile"){ openSheet("editProfile"); return; }
