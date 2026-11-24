@@ -78,6 +78,7 @@ a{color:var(--accent-strong);}
 .chip-dot{display:block;font-size:9.5px;border-radius:5px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .chip-idea{background:var(--accent-soft);color:var(--accent-strong);}
 .chip-event{background:var(--warn-soft);color:var(--warn);}
+.chip-story{background:var(--ok-soft);color:var(--ok);}
 .chip-more{font-size:9.5px;color:var(--fg-faint);}
 .chip-dot[draggable="true"]{cursor:grab;}
 .day-cell.drop-hover{outline:2px dashed var(--accent-strong);outline-offset:-2px;}
@@ -165,6 +166,7 @@ function campMonthLabel(c){
 const WEEKDAYS_SHORT = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 const EVENT_TYPES = ["Evento","Curso","Producción"];
 const FORMATS = ["Reel","Post","Carrusel","Story"];
+const FEED_FORMATS = FORMATS.filter(f=>f!=="Story");
 const FORMAT_CLASS = {Reel:"b-reel",Post:"b-post",Carrusel:"b-carrusel",Story:"b-story"};
 const STATUS_DOT_CLASS = {aprobado:"status-dot-ok",cambios:"status-dot-bad",pendiente:"status-dot-neutral",borrador:"status-dot-neutral"};
 const STATUS_LABEL = {borrador:"Borrador",pendiente:"Pendiente",aprobado:"Aprobado",cambios:"Pide cambios"};
@@ -443,7 +445,7 @@ function renderCalendarTab(){
     const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const items = state.calendarItems.filter(it => it.date === key);
     const shown = items.slice(0,2);
-    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':'chip-idea'}"${isAgency()?` draggable="true" data-drag-id="${it.id}"`:""}><span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}"></span>${esc(it.title||(it.kind==='event'?'Evento':'Idea'))}</span>`).join("");
+    let chipsHtml = shown.map(it => `<span class="chip-dot ${it.kind==='event'?'chip-event':it.kind==='story'?'chip-story':'chip-idea'}"${isAgency()?` draggable="true" data-drag-id="${it.id}"`:""}><span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}"></span>${esc(it.title||(it.kind==='event'?'Evento':it.kind==='story'?'Historia':'Idea'))}</span>`).join("");
     if (items.length > 2) chipsHtml += `<span class="chip-more">+${items.length-2} más</span>`;
     cells += `<button class="day-cell${key===todayKey?' today':''}" data-action="open-day" data-date="${key}" data-drop-date="${key}"><span class="day-num">${d}</span><span class="day-chips">${chipsHtml}</span></button>`;
   }
@@ -490,37 +492,48 @@ function itemCardHTML(it){
   </div>`;
 }
 function productionBlockHTML(it){
-  if (it.status !== "aprobado") return "";
   const extra = state.itemImages[it.id] || [];
+  const hasProd = it.media_url || it.story_media_url || it.final_copy || extra.length;
+  if (it.status !== "aprobado" && !hasProd) return "";
   if (!isAgency()){
     return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
       <div class="field-label" style="margin-bottom:8px;">Producción</div>
       ${it.final_copy ? `<div style="font-size:13px;white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : `<div style="font-size:12px;color:var(--fg-faint);margin-bottom:8px;">Todavía no se cargó el copy final.</div>`}
+      <div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin:10px 0 6px;">Feed</div>
       ${it.media_url ? (it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`) : `<div style="font-size:12px;color:var(--fg-faint);">Todavía no se cargó el archivo final.</div>`}
+      <div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin:10px 0 6px;">Historia</div>
+      ${it.story_media_url ? (it.story_media_type==="video" ? `<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`) : `<div style="font-size:12px;color:var(--fg-faint);">Todavía no se cargó el archivo para historia.</div>`}
     </div>`;
   }
   return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
     <div class="field-label" style="margin-bottom:8px;">Producción</div>
     <div class="field"><textarea class="textarea" id="prod-copy-${it.id}" rows="4" placeholder="Copy de la publicación…">${esc(it.final_copy||"")}</textarea></div>
-    <div class="field"><div class="field-label">Archivo final (imagen o video)${it.media_url?' — ya cargado, seleccioná uno nuevo para reemplazarlo':''}</div>
-      ${it.media_url?`<div style="margin-bottom:6px;">${it.media_type==="video"?`<video src="${esc(it.media_url)}" controls style="width:100%;max-height:200px;border-radius:10px;"></video>`:`<img src="${esc(it.media_url)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;">`}</div>`:""}
-      <input type="file" accept="image/*,video/*" id="prod-media-${it.id}">
-    </div>
-    <div class="field">
-      <div class="field-label">Imágenes extra del carrusel</div>
-      <div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">
-        ${extra.length===0?`<div style="font-size:12px;color:var(--fg-faint);">Sin imágenes extra todavía</div>`:
-          extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">
+
+    <div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin:12px 0 6px;">Feed</div>
+    ${(it.media_url || extra.length) ? `<div class="field">
+      <div class="field-label">Ya cargado</div>
+      <div class="row-gap" style="flex-wrap:wrap;">
+        ${it.media_url?`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">${it.media_type==="video"?`<video src="${esc(it.media_url)}" style="width:100%;height:100%;object-fit:cover;"></video>`:`<img src="${esc(it.media_url)}" style="width:100%;height:100%;object-fit:cover;">`}<span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">1</span></div>`:""}
+        ${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">
             <img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;">
             <span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>
             <button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>
           </div>`).join("")}
       </div>
-      <div class="row-gap">
-        <input type="file" accept="image/*" id="item-carousel-file-${it.id}" multiple style="flex:1;">
-        <button class="btn btn-sm" data-action="item-image-add" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
-      </div>
+    </div>`:""}
+    <div class="field"><div class="field-label">Archivo${(it.media_url||extra.length)?' nuevo (opcional) — reemplaza la portada y suma al carrusel':' (imagen o video) — para un carrusel, seleccioná varias juntas'}</div>
+      <input type="file" accept="image/*,video/*" id="prod-media-${it.id}" multiple>
     </div>
+
+    <div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin:12px 0 6px;">Historia</div>
+    ${it.story_media_url ? `<div class="field">
+      <div class="field-label">Ya cargado</div>
+      <div style="width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" style="width:100%;height:100%;object-fit:cover;"></video>`:`<img src="${esc(it.story_media_url)}" style="width:100%;height:100%;object-fit:cover;">`}</div>
+    </div>`:""}
+    <div class="field"><div class="field-label">Archivo${it.story_media_url?' nuevo (opcional) — reemplaza el de historia':' (imagen o video)'}</div>
+      <input type="file" accept="image/*,video/*" id="prod-story-media-${it.id}">
+    </div>
+
     ${sheetMsgHTML()}
     <button class="btn btn-accent btn-block" data-action="item-production-save" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Guardando…":"Guardar producción"}</button>
   </div>`;
@@ -561,14 +574,27 @@ async function itemEditSave(id){
 async function itemProductionSave(id){
   const it = state.calendarItems.find(i=>i.id===id);
   const finalCopy = val("prod-copy-"+id).trim();
-  const f = file0("prod-media-"+id);
+  const files = filesAll("prod-media-"+id);
+  const storyFile = file0("prod-story-media-"+id);
   setSheetBusy(true);
   try{
     const patch = {final_copy: finalCopy};
-    if (f){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
+    if (files.length){ const f=files[0]; const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
+    if (storyFile){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(storyFile.name)}`, storyFile); patch.story_media_url=url; patch.story_media_path=path; patch.story_media_type = storyFile.type&&storyFile.type.indexOf("video/")===0 ? "video" : "image"; }
     const {error} = await sb.from("calendar_items").update(patch).eq("id", id);
     if (error) throw error;
+    if (files.length > 1){
+      let order = (state.itemImages[id]||[]).length;
+      for (const f of files.slice(1)){
+        const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f);
+        const {error:ie} = await sb.from("item_images").insert({item_id:id, client_id:state.clientId, order, image_url:url, image_path:path});
+        if (ie) throw ie;
+        order++;
+      }
+    }
     await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it?it.title:""} (producción)`, byName:viewerName()});
+    const mEl = qs("prod-media-"+id); if (mEl) mEl.value="";
+    const sEl = qs("prod-story-media-"+id); if (sEl) sEl.value="";
     setSheetMsg("Producción guardada.", false);
   }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
   finally{ setSheetBusy(false); }
@@ -579,7 +605,7 @@ async function openDaySheet(date){
   render();
 }
 async function submitNewItem(date){
-  const kind = val("new-item-kind") || "idea";
+  const kind = (state.sheet && state.sheet.newKind) || "idea";
   const title = val("new-item-title").trim();
   const format = val("new-item-format");
   const description = val("new-item-desc").trim();
@@ -599,7 +625,7 @@ async function itemStatusChange(id, status){
   try {
     const it = state.calendarItems.find(i=>i.id===id);
     await setApprovalStatus("calendar_items", id, status);
-    if (it) await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it.title} → ${STATUS_LABEL[status]}`, byName:viewerName()});
+    if (it) await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":it.kind==="story"?"Historia":"Idea de contenido", label:`${it.title} → ${STATUS_LABEL[status]}`, byName:viewerName()});
   } catch(e){ alert("No se pudo guardar: "+e.message); }
 }
 async function itemAddComment(id){
@@ -613,7 +639,7 @@ async function itemDelete(id){
   const it = state.calendarItems.find(i=>i.id===id);
   if (!it) return;
   if (!confirm("¿Eliminar? Se puede recuperar desde el historial.")) return;
-  await trashRow("calendar_items", id, viewerName(), {clientId:state.clientId, entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label: it.title});
+  await trashRow("calendar_items", id, viewerName(), {clientId:state.clientId, entityType: it.kind==="event"?"Fecha especial":it.kind==="story"?"Historia":"Idea de contenido", label: it.title});
 }
 async function moveItemToDate(id, newDate){
   if (!isAgency()) return;
@@ -622,7 +648,7 @@ async function moveItemToDate(id, newDate){
   const {data, error} = await sb.from("calendar_items").update({date:newDate}).eq("id", id).select("id");
   if (error){ alert("No se pudo mover: "+error.message); return; }
   if (!data || data.length===0){ alert("Supabase no dejó mover el ítem (revisá el permiso de UPDATE para calendar_items)."); return; }
-  await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it.title} → movido al ${newDate}`, byName:viewerName()});
+  await logActivity({clientId:state.clientId, action:"update", entityType: it.kind==="event"?"Fecha especial":it.kind==="story"?"Historia":"Idea de contenido", label:`${it.title} → movido al ${newDate}`, byName:viewerName()});
 }
 
 /* ===================== INSTAGRAM ===================== */
@@ -981,18 +1007,18 @@ function sheetMsgHTML(){ return state.sheetMsg ? `<div class="msg ${state.sheetE
 function headHTML(title){ return `<div class="sheet-head"><div class="sheet-title">${esc(title)}</div><button class="x-btn" data-action="sheet-close">×</button></div>`; }
 
 function sheetDay(s){
+  const newKind = s.newKind || "idea";
   return `${headHTML(new Date(s.date+"T00:00:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"}))}
   ${dayItemsHTML(s.date)}
   ${isAgency() ? `
   <div class="card">
     <div class="field-label" style="margin-bottom:8px;">Agregar nuevo</div>
     <div class="seg" style="margin-bottom:10px;">
-      <button class="seg-btn active" id="kind-idea-btn" data-action="new-item-kind" data-kind="idea">Idea de contenido</button>
-      <button class="seg-btn" id="kind-event-btn" data-action="new-item-kind" data-kind="event">Fecha especial</button>
+      <button class="seg-btn${newKind==="idea"?" active":""}" data-action="new-item-kind" data-kind="idea">Idea de contenido</button>
+      <button class="seg-btn${newKind==="event"?" active":""}" data-action="new-item-kind" data-kind="event">Fecha especial</button>
     </div>
-    <input type="hidden" id="new-item-kind" value="idea">
     <div class="field"><input class="input" id="new-item-title" placeholder="Título"></div>
-    <div class="field"><select class="select" id="new-item-format">${FORMATS.map(f=>`<option>${f}</option>`).join("")}</select></div>
+    <div class="field"><select class="select" id="new-item-format">${(newKind==="event"?EVENT_TYPES:FEED_FORMATS).map(f=>`<option>${f}</option>`).join("")}</select></div>
     <div class="field"><textarea class="textarea" id="new-item-desc" rows="7" placeholder="Guion, idea, detalle…"></textarea></div>
     ${sheetMsgHTML()}
     <button class="btn btn-accent btn-block" data-action="new-item-save" data-date="${s.date}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
@@ -1269,15 +1295,7 @@ document.addEventListener("click", async (e) => {
   if (a === "month-prev"){ await changeMonth(-1); return; }
   if (a === "month-next"){ await changeMonth(1); return; }
   if (a === "open-day"){ openSheet("day", {date: el.dataset.date}); return; }
-  if (a === "new-item-kind"){
-    qs("new-item-kind").value = el.dataset.kind;
-    qs("kind-idea-btn").classList.toggle("active", el.dataset.kind==="idea");
-    qs("kind-event-btn").classList.toggle("active", el.dataset.kind==="event");
-    const fmtSel = qs("new-item-format");
-    const opts = el.dataset.kind==="event" ? EVENT_TYPES : FORMATS;
-    fmtSel.innerHTML = opts.map(o=>`<option>${o}</option>`).join("");
-    return;
-  }
+  if (a === "new-item-kind"){ state.sheet.newKind = el.dataset.kind; state.sheetMsg=""; render(); return; }
   if (a === "new-item-save"){ await submitNewItem(el.dataset.date); return; }
   if (a === "item-status"){ await itemStatusChange(el.dataset.id, el.dataset.status); return; }
   if (a === "item-comment"){ await itemAddComment(el.dataset.id); return; }
