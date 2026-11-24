@@ -201,9 +201,9 @@ function commentsPanelHTML(comments, {inputId, action, dataId, placeholder}){
     <div class="cc-list">
       ${comments.length ? comments.map(c => `<div class="comment"><b>${esc(c.author_name||"Alguien")}</b> <span class="when">${fmtWhen(c.created_at)}</span><div>${esc(c.text)}</div></div>`).join("") : `<div style="font-size:12px;color:var(--fg-faint);">Sin comentarios todavía</div>`}
     </div>
-    <div class="cc-input-row" style="display:flex;gap:6px;">
-      <input class="input" style="flex:1;" placeholder="${esc(placeholder)}" id="${inputId}" />
-      <button class="btn btn-accent btn-sm" data-action="${action}" data-id="${dataId}">Enviar</button>
+    <div class="cc-input-row">
+      <textarea class="textarea" rows="3" style="margin-bottom:6px;" placeholder="${esc(placeholder)}" id="${inputId}"></textarea>
+      <button class="btn btn-accent btn-sm btn-block" data-action="${action}" data-id="${dataId}">Enviar</button>
     </div>
   </div>`;
 }
@@ -470,35 +470,6 @@ function itemCardHTML(it){
   const extra = state.itemImages[it.id] || [];
   const hasProd = !!(it.media_url || it.story_media_url || it.final_copy || extra.length);
   const editingProd = isAgency() && state.sheet && state.sheet.editingProdId === it.id;
-  if (hasProd && !editingProd){
-    return `
-    <div class="card">
-      <div class="cc-wrap">
-      <div class="cc-main">
-      <div class="row-gap" style="justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-        <div>
-          <div style="font-weight:600;font-size:14px;">${esc(it.title)}</div>
-          <div style="font-size:12px;color:var(--fg-faint);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${it.kind==="event"?"Fecha especial":"Idea de contenido"}${it.format?`<span class="badge ${FORMAT_CLASS[it.format]||"b-borrador"}">${esc(it.format)}</span>`:""}</div>
-        </div>
-        <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
-      </div>
-      ${it.media_url || extra.length ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Feed</div>
-      ${it.media_url ? (it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;object-fit:cover;">`) : ""}
-      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);"><img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span></div>`).join("")}</div>`:""}` : ""}
-      ${it.story_media_url ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Historia</div>
-      ${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;"></video>`:`<img src="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;object-fit:cover;">`}`:""}
-      ${it.final_copy ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : ""}
-      <div class="row-gap" style="margin-bottom:6px;">
-        <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
-        <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
-        ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-prod-edit" data-id="${it.id}">Editar producción</button>
-        <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
-      </div>
-      </div>
-      ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
-      </div>
-    </div>`;
-  }
   return `
   <div class="card">
     <div class="cc-wrap">
@@ -517,20 +488,45 @@ function itemCardHTML(it){
       ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
       <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
     </div>
-    ${(it.status === "aprobado" || editingProd) ? productionBlockHTML(it, editingProd) : ""}
+    ${(it.status === "aprobado" || hasProd || editingProd) ? productionBlockHTML(it, {editingProd}) : ""}
     </div>
     ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
     </div>
   </div>`;
 }
-function productionBlockHTML(it, showCancel){
+function productionBlockHTML(it, opts){
+  opts = opts || {};
   const extra = state.itemImages[it.id] || [];
+  const hasProd = !!(it.media_url || it.story_media_url || it.final_copy || extra.length);
+  const editingProd = !!opts.editingProd;
+  const showForm = !hasProd || editingProd;
+
+  if (!showForm){
+    return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
+      <div class="field-label" style="margin-bottom:8px;">Producción</div>
+      ${it.media_url || extra.length ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Feed</div>
+      ${it.media_url ? `<div style="position:relative;margin-bottom:8px;">
+        ${it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`}
+        ${isAgency()?`<button data-action="item-media-clear" data-id="${it.id}" data-which="feed" title="Borrar imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
+      </div>` : ""}
+      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);"><img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>${isAgency()?`<button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>`:""}</div>`).join("")}</div>`:""}` : ""}
+      ${it.story_media_url ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Historia</div>
+      <div style="position:relative;margin-bottom:8px;">
+        ${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>`:`<img src="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`}
+        ${isAgency()?`<button data-action="item-media-clear" data-id="${it.id}" data-which="story" title="Borrar imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
+      </div>`:""}
+      ${it.final_copy ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : ""}
+      ${isAgency()?`<button class="btn btn-sm btn-ghost" data-action="item-prod-edit" data-id="${it.id}">Editar producción</button>`:""}
+    </div>`;
+  }
+
   if (!isAgency()){
     return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
       <div class="field-label" style="margin-bottom:8px;">Producción</div>
       <div style="font-size:12px;color:var(--fg-faint);">Todavía no se cargó el contenido final.</div>
     </div>`;
   }
+  const showCancel = hasProd;
   return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
     <div class="field-label" style="margin-bottom:8px;">Producción</div>
     <div class="field"><textarea class="textarea" id="prod-copy-${it.id}" rows="4" placeholder="Copy de la publicación…">${esc(it.final_copy||"")}</textarea></div>
@@ -633,6 +629,21 @@ async function itemProductionSave(id){
     setSheetMsg("Producción guardada.", false);
   }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
   finally{ setSheetBusy(false); }
+}
+async function clearItemMedia(id, which){
+  if (!confirm(which==="story" ? "¿Borrar la imagen de historia?" : "¿Borrar la imagen del feed? (el copy y lo demás quedan igual)")) return;
+  const it = state.calendarItems.find(i=>i.id===id);
+  const patch = which==="story"
+    ? {story_media_url:null, story_media_path:null, story_media_type:null}
+    : {media_url:null, media_path:null, media_type:null};
+  try{
+    const {data, error} = await sb.from("calendar_items").update(patch).eq("id", id).select("id");
+    if (error) throw error;
+    if (!data || data.length === 0){ alert('Supabase no dejó borrar la imagen (revisá el permiso de UPDATE para calendar_items).'); return; }
+    if (it) Object.assign(it, patch);
+    await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it?it.title:""} (se borró la imagen${which==="story"?" de historia":" de feed"})`, byName:viewerName()});
+    render();
+  }catch(e){ alert("No se pudo borrar: "+e.message); }
 }
 async function openDaySheet(date){
   state.sheet = {type:"day", date, newKind:"idea"};
@@ -1164,7 +1175,7 @@ function sheetFeedView(s){
     ${hasProd?`<button class="btn btn-sm btn-ghost" data-action="item-prod-edit" data-id="${it.id}">Editar producción</button>`:""}
     <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>`:""}
   </div>
-  ${(editingProd || (it.status==="aprobado" && !hasProd)) ? productionBlockHTML(it, editingProd && hasProd) : ""}
+  ${(editingProd || (it.status==="aprobado" && !hasProd)) ? productionBlockHTML(it, {editingProd}) : ""}
   </div>
   ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
   </div>`;
@@ -1364,6 +1375,7 @@ document.addEventListener("click", async (e) => {
   if (a === "feed-slide-next"){ const max=parseInt(el.dataset.max); const idx=Math.min(max, parseInt(el.dataset.idx)+1); state.sheet.idx=idx; render(); return; }
   if (a === "item-image-add"){ await addItemImages(el.dataset.id); return; }
   if (a === "item-image-delete"){ await deleteItemImage(el.dataset.id); return; }
+  if (a === "item-media-clear"){ await clearItemMedia(el.dataset.id, el.dataset.which); return; }
   if (a === "brand-delete"){ await brandDelete(el.dataset.id); return; }
   if (a === "ads-platform"){ state.adsPlatform = el.dataset.platform; render(); return; }
   if (a === "campaign-new"){ openSheet("campaignEdit", {id:null, platform: state.adsPlatform}); return; }
