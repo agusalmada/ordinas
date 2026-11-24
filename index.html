@@ -212,6 +212,7 @@ function qs(id){ return document.getElementById(id); }
 function val(id){ const el=qs(id); return el ? el.value : ""; }
 function checked(id){ const el=qs(id); return el ? el.checked : false; }
 function file0(id){ const el=qs(id); return el && el.files && el.files[0] ? el.files[0] : null; }
+function filesAll(id){ const el=qs(id); return el && el.files ? Array.from(el.files) : []; }
 
 /* ===================== STATE ===================== */
 const state = {
@@ -409,7 +410,7 @@ async function loadCalendar(){
     .subscribe();
 }
 async function addItemImages(itemId){
-  const el = qs("item-carousel-file");
+  const el = qs("item-carousel-file-"+itemId);
   const files = el && el.files ? Array.from(el.files) : [];
   if (!files.length) return;
   setSheetBusy(true);
@@ -476,16 +477,52 @@ function itemCardHTML(it){
       <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
     </div>
     ${it.description ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.description)}</div>` : ""}
-    ${it.media_url ? (it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:280px;object-fit:cover;">`) : ""}
     <div class="row-gap" style="margin-bottom:6px;">
       <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
       <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="cambios">Pedir cambios</button>
       ${isAgency() ? `<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
       <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>` : ""}
     </div>
+    ${productionBlockHTML(it)}
     </div>
     ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
     </div>
+  </div>`;
+}
+function productionBlockHTML(it){
+  if (it.status !== "aprobado") return "";
+  const extra = state.itemImages[it.id] || [];
+  if (!isAgency()){
+    return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
+      <div class="field-label" style="margin-bottom:8px;">Producción</div>
+      ${it.final_copy ? `<div style="font-size:13px;white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : `<div style="font-size:12px;color:var(--fg-faint);margin-bottom:8px;">Todavía no se cargó el copy final.</div>`}
+      ${it.media_url ? (it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;">`) : `<div style="font-size:12px;color:var(--fg-faint);">Todavía no se cargó el archivo final.</div>`}
+    </div>`;
+  }
+  return `<div class="card" style="margin-top:10px;background:var(--surface-3);">
+    <div class="field-label" style="margin-bottom:8px;">Producción</div>
+    <div class="field"><textarea class="textarea" id="prod-copy-${it.id}" rows="4" placeholder="Copy de la publicación…">${esc(it.final_copy||"")}</textarea></div>
+    <div class="field"><div class="field-label">Archivo final (imagen o video)${it.media_url?' — ya cargado, seleccioná uno nuevo para reemplazarlo':''}</div>
+      ${it.media_url?`<div style="margin-bottom:6px;">${it.media_type==="video"?`<video src="${esc(it.media_url)}" controls style="width:100%;max-height:200px;border-radius:10px;"></video>`:`<img src="${esc(it.media_url)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;">`}</div>`:""}
+      <input type="file" accept="image/*,video/*" id="prod-media-${it.id}">
+    </div>
+    <div class="field">
+      <div class="field-label">Imágenes extra del carrusel</div>
+      <div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">
+        ${extra.length===0?`<div style="font-size:12px;color:var(--fg-faint);">Sin imágenes extra todavía</div>`:
+          extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">
+            <img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;">
+            <span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>
+            <button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>
+          </div>`).join("")}
+      </div>
+      <div class="row-gap">
+        <input type="file" accept="image/*" id="item-carousel-file-${it.id}" multiple style="flex:1;">
+        <button class="btn btn-sm" data-action="item-image-add" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
+      </div>
+    </div>
+    ${sheetMsgHTML()}
+    <button class="btn btn-accent btn-block" data-action="item-production-save" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Guardando…":"Guardar producción"}</button>
   </div>`;
 }
 function itemEditFormHTML(it){
@@ -496,10 +533,6 @@ function itemEditFormHTML(it){
     <div class="field"><select class="select" id="edit-item-format-${it.id}">${opts.map(f=>`<option ${it.format===f?"selected":""}>${f}</option>`).join("")}</select></div>
     <div class="field"><textarea class="textarea" id="edit-item-desc-${it.id}" rows="7">${esc(it.description||"")}</textarea></div>
     ${it.format==="Reel"?`<div class="field"><div class="field-label">Link del Reel publicado (opcional)</div><input class="input" id="edit-item-reellink-${it.id}" value="${esc(it.reel_link||'')}" placeholder="https://instagram.com/reel/…"></div>`:""}
-    <div class="field"><div class="field-label">Imagen o video (opcional)</div>
-      ${it.media_url?`<div style="margin-bottom:6px;">${it.media_type==="video"?`<video src="${esc(it.media_url)}" controls style="width:100%;max-height:200px;border-radius:10px;"></video>`:`<img src="${esc(it.media_url)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;">`}</div>`:""}
-      <input type="file" accept="image/*,video/*" id="edit-item-media-${it.id}" placeholder="${it.media_url?'Reemplazar…':''}">
-    </div>
     ${sheetMsgHTML()}
     <div class="row-gap">
       <button class="btn btn-accent" data-action="item-edit-save" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Guardando…":"Guardar"}</button>
@@ -513,17 +546,30 @@ async function itemEditSave(id){
   const description = val("edit-item-desc-"+id).trim();
   if (!title){ setSheetMsg("Poné un título.", true); return; }
   const it = state.calendarItems.find(i=>i.id===id);
-  const f = file0("edit-item-media-"+id);
   const reelLinkEl = qs("edit-item-reellink-"+id);
   setSheetBusy(true);
   try{
     const patch = {title, format, description, reel_link: format==="Reel" && reelLinkEl ? reelLinkEl.value.trim() : ""};
-    if (f){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
     const {error} = await sb.from("calendar_items").update(patch).eq("id", id);
     if (error) throw error;
     await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
     state.sheet.editingId = null;
     render();
+  }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
+  finally{ setSheetBusy(false); }
+}
+async function itemProductionSave(id){
+  const it = state.calendarItems.find(i=>i.id===id);
+  const finalCopy = val("prod-copy-"+id).trim();
+  const f = file0("prod-media-"+id);
+  setSheetBusy(true);
+  try{
+    const patch = {final_copy: finalCopy};
+    if (f){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
+    const {error} = await sb.from("calendar_items").update(patch).eq("id", id);
+    if (error) throw error;
+    await logActivity({clientId:state.clientId, action:"update", entityType: it&&it.kind==="event"?"Fecha especial":"Idea de contenido", label:`${it?it.title:""} (producción)`, byName:viewerName()});
+    setSheetMsg("Producción guardada.", false);
   }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
   finally{ setSheetBusy(false); }
 }
@@ -537,17 +583,14 @@ async function submitNewItem(date){
   const title = val("new-item-title").trim();
   const format = val("new-item-format");
   const description = val("new-item-desc").trim();
-  const f = file0("new-item-media");
   if (!title){ setSheetMsg("Poné un título.", true); return; }
   setSheetBusy(true);
   try{
     const patch = {client_id: state.clientId, date, kind, title, format, description, status:"borrador"};
-    if (f){ const {url,path} = await uploadMedia(`calendar-media/${state.clientId}/${Date.now()}-${safeFileName(f.name)}`, f); patch.media_url=url; patch.media_path=path; patch.media_type = f.type&&f.type.indexOf("video/")===0 ? "video" : "image"; }
     const {error} = await sb.from("calendar_items").insert(patch);
     if (error) throw error;
     await logActivity({clientId:state.clientId, action:"create", entityType: kind==="event"?"Fecha especial":"Idea de contenido", label:title, byName:viewerName()});
     qs("new-item-title").value=""; qs("new-item-desc").value="";
-    const mEl = qs("new-item-media"); if (mEl) mEl.value="";
     setSheetMsg("Agregado.", false);
   }catch(e){ setSheetMsg("No se pudo guardar: "+e.message, true); }
   finally{ setSheetBusy(false); }
@@ -617,11 +660,15 @@ function feedItems(){
 function renderInstagramTab(){
   const c = currentClient();
   const hls = state.highlights;
-  const feed = feedItems().slice(0,12);
-  const slots = feed.map(it => `<button class="grid-slot" data-action="feed-view" data-id="${it.id}">
-    ${it.media_url ? `<img src="${esc(it.media_url)}">` : `<span style="padding:4px;">${esc(it.title||"")}</span>`}
-    <span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}" style="position:absolute;top:5px;right:5px;width:9px;height:9px;margin:0;border:1.5px solid #fff;"></span>
-  </button>`);
+  const gy = state.month.getFullYear(), gm = state.month.getMonth();
+  const feed = feedItems().filter(it => { const d = new Date(it.date+"T00:00:00"); return d.getFullYear()===gy && d.getMonth()===gm; });
+  const slots = feed.map(it => `<span style="position:relative;display:block;">
+    <button class="grid-slot" style="display:block;width:100%;" data-action="feed-view" data-id="${it.id}">
+      ${it.media_url ? `<img src="${esc(it.media_url)}">` : `<span style="padding:4px;">${esc(it.title||"")}</span>`}
+      <span class="status-dot ${STATUS_DOT_CLASS[it.status]||'status-dot-neutral'}" style="position:absolute;top:5px;right:5px;width:9px;height:9px;margin:0;border:1.5px solid #fff;"></span>
+    </button>
+    ${isAgency()?`<button data-action="item-delete" data-id="${it.id}" title="Eliminar" style="position:absolute;top:5px;left:5px;width:18px;height:18px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:11px;line-height:18px;cursor:pointer;">×</button>`:""}
+  </span>`);
   return `
   <div class="profile-row">
     <button class="avatar" data-action="${isAgency()?'edit-profile':''}">${c&&c.avatar_url?`<img src="${esc(c.avatar_url)}">`:(c?esc((c.name||"?").charAt(0).toUpperCase()):"?")}</button>
@@ -636,8 +683,12 @@ function renderInstagramTab(){
     ${hls.map(h=>`<button class="hl-item" data-action="view-story" data-hid="${h.id}"><span class="hl-circle-wrap"><span class="hl-circle">${h.image_url?`<img src="${esc(h.image_url)}">`:"✦"}</span>${STATUS_DOT_CLASS[h.status]?`<span class="hl-dot ${STATUS_DOT_CLASS[h.status]}"></span>`:""}</span><span class="hl-label">${esc(h.label)}</span></button>`).join("")}
     ${isAgency()?`<button class="hl-item" data-action="highlight-new"><span class="hl-circle" style="border:1px dashed var(--accent-strong);color:var(--accent-strong);">+</span><span class="hl-label">Nueva</span></button>`:""}
   </div>
-  <div class="field-label" style="margin:14px 0 8px;">Grilla (se arma sola con lo que cargás en el Calendario)</div>
-  ${feed.length===0?`<div class="loading-text">Todavía no hay publicaciones de feed cargadas en el Calendario.</div>`:`<div class="grid3">${slots.join("")}</div>`}
+  <div class="topbar-row" style="padding-top:0;margin:14px 0 8px;">
+    <button class="btn btn-ghost btn-sm" data-action="month-prev">‹</button>
+    <div style="flex:1;text-align:center;font-weight:600;font-size:14px;text-transform:capitalize;">${MONTHS[gm]} ${gy}</div>
+    <button class="btn btn-ghost btn-sm" data-action="month-next">›</button>
+  </div>
+  ${feed.length===0?`<div class="loading-text">Todavía no hay publicaciones de feed cargadas en el Calendario para ${MONTHS[gm].toLowerCase()} ${gy}.</div>`:`<div class="grid3">${slots.join("")}</div>`}
   `;
 }
 async function saveClientProfile(){
@@ -943,7 +994,6 @@ function sheetDay(s){
     <div class="field"><input class="input" id="new-item-title" placeholder="Título"></div>
     <div class="field"><select class="select" id="new-item-format">${FORMATS.map(f=>`<option>${f}</option>`).join("")}</select></div>
     <div class="field"><textarea class="textarea" id="new-item-desc" rows="7" placeholder="Guion, idea, detalle…"></textarea></div>
-    <div class="field"><div class="field-label">Imagen o video (opcional)</div><input type="file" accept="image/*,video/*" id="new-item-media"></div>
     ${sheetMsgHTML()}
     <button class="btn btn-accent btn-block" data-action="new-item-save" data-date="${s.date}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
   </div>` : ""}`;
@@ -1042,7 +1092,7 @@ function sheetFeedView(s){
     <span class="badge ${STATUS_CLASS[it.status]}">${STATUS_LABEL[it.status]}</span>
   </div>
   ${it.date?`<div style="font-size:12px;color:var(--fg-faint);margin-bottom:6px;text-transform:capitalize;">${new Date(it.date+"T00:00:00").toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"})}</div>`:""}
-  ${it.description ? `<div style="font-size:14px;margin-bottom:8px;white-space:pre-wrap;">${esc(it.description)}</div>`:""}
+  ${it.final_copy ? `<div style="font-size:14px;margin-bottom:8px;white-space:pre-wrap;">${esc(it.final_copy)}</div>`:""}
   ${it.format==="Reel"&&it.reel_link?`<a href="${esc(it.reel_link)}" target="_blank" style="display:block;margin-bottom:8px;text-decoration:underline;">${esc(it.reel_link)}</a>`:""}
   <div class="row-gap" style="margin-bottom:8px;">
     <button class="btn btn-sm" data-action="item-status" data-id="${it.id}" data-status="aprobado">✓ Aprobar</button>
@@ -1050,21 +1100,7 @@ function sheetFeedView(s){
     ${isAgency()?`<button class="btn btn-sm btn-ghost" data-action="item-edit" data-id="${it.id}">Editar</button>
     <button class="btn btn-sm btn-danger" data-action="item-delete" data-id="${it.id}">Eliminar</button>`:""}
   </div>
-  ${isAgency()?`<div style="margin-bottom:12px;">
-    <div class="field-label">Imágenes del carrusel (además de la portada)</div>
-    <div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">
-      ${extra.length===0?`<div style="font-size:12px;color:var(--fg-faint);">Sin imágenes extra todavía</div>`:
-        extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">
-          <img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;">
-          <span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>
-          <button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>
-        </div>`).join("")}
-    </div>
-    <div class="row-gap">
-      <input type="file" accept="image/*" id="item-carousel-file" multiple style="flex:1;">
-      <button class="btn btn-sm" data-action="item-image-add" data-id="${it.id}" ${state.sheetBusy?"disabled":""}>${state.sheetBusy?"Subiendo…":"Agregar"}</button>
-    </div>
-  </div>`:""}
+  ${productionBlockHTML(it)}
   </div>
   ${commentsPanelHTML(cs, {inputId:`comment-input-${it.id}`, action:"item-comment", dataId:it.id, placeholder:"Escribir un comentario…"})}
   </div>`;
@@ -1248,6 +1284,7 @@ document.addEventListener("click", async (e) => {
   if (a === "item-edit"){ state.sheet.editingId = el.dataset.id; state.sheetMsg=""; render(); return; }
   if (a === "item-edit-save"){ await itemEditSave(el.dataset.id); return; }
   if (a === "item-edit-cancel"){ state.sheet.editingId = null; state.sheetMsg=""; render(); return; }
+  if (a === "item-production-save"){ await itemProductionSave(el.dataset.id); return; }
   if (a === "item-delete"){ await itemDelete(el.dataset.id); return; }
   if (a === "edit-profile"){ openSheet("editProfile"); return; }
   if (a === "profile-save"){ await saveClientProfile(); return; }
