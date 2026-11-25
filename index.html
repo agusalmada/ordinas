@@ -88,6 +88,7 @@ a{color:var(--accent-strong);}
 .chip-more{font-size:9.5px;color:var(--fg-faint);}
 .chip-dot[draggable="true"]{cursor:grab;}
 .day-cell.drop-hover{outline:2px dashed var(--accent-strong);outline-offset:-2px;}
+.img-thumb.img-drop-hover{outline:2px dashed var(--accent-strong);outline-offset:-2px;}
 .status-dot{display:inline-block;width:6px;height:6px;border-radius:999px;margin-right:4px;flex-shrink:0;vertical-align:middle;}
 .status-dot-ok{background:var(--ok);}
 .status-dot-bad{background:var(--bad);}
@@ -277,11 +278,15 @@ async function logActivity(opts){
   });
 }
 async function trashRow(table, id, byName, opts){
-  await sb.from(table).update({deleted_at:new Date().toISOString(), deleted_by:byName}).eq("id", id);
+  const {data, error} = await sb.from(table).update({deleted_at:new Date().toISOString(), deleted_by:byName}).eq("id", id).select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Supabase no dejó borrar (revisá que exista una política de UPDATE para la tabla \""+table+"\").");
   await logActivity({clientId:opts.clientId, action:"delete", entityType:opts.entityType, label:opts.label, byName, collection:table, docId:id});
 }
 async function restoreRow(table, id, byName, opts){
-  await sb.from(table).update({deleted_at:null, deleted_by:null}).eq("id", id);
+  const {data, error} = await sb.from(table).update({deleted_at:null, deleted_by:null}).eq("id", id).select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Supabase no dejó restaurar (revisá que exista una política de UPDATE para la tabla \""+table+"\").");
   await logActivity({clientId:opts.clientId, action:"restore", entityType:opts.entityType, label:opts.label, byName, collection:table, docId:id});
 }
 async function purgeRow(table, id, byName, opts){
@@ -455,7 +460,39 @@ async function addItemImages(itemId){
   finally{ setSheetBusy(false); }
 }
 async function deleteItemImage(imgId){
-  await trashRow("item_images", imgId, viewerName(), {clientId:state.clientId, entityType:"Idea / evento", label:"Imagen de carrusel"});
+  try{
+    await trashRow("item_images", imgId, viewerName(), {clientId:state.clientId, entityType:"Idea / evento", label:"Imagen de carrusel"});
+    for (const itemId in state.itemImages){
+      const list = state.itemImages[itemId];
+      const idx = list.findIndex(im=>im.id===imgId);
+      if (idx !== -1){ list.splice(idx,1); break; }
+    }
+    render();
+  }catch(e){ alert("No se pudo borrar la imagen: "+e.message); }
+}
+async function reorderItemImage(itemId, draggedId, targetId){
+  if (!draggedId || !targetId || draggedId === targetId) return;
+  const list = (state.itemImages[itemId] || []).slice();
+  const fromIdx = list.findIndex(im=>im.id===draggedId);
+  const toIdx = list.findIndex(im=>im.id===targetId);
+  if (fromIdx===-1 || toIdx===-1) return;
+  const [moved] = list.splice(fromIdx,1);
+  list.splice(toIdx,0,moved);
+  state.itemImages[itemId] = list;
+  render();
+  try{
+    for (let i=0;i<list.length;i++){
+      if (list[i].order !== i){
+        const {data, error} = await sb.from("item_images").update({order:i}).eq("id", list[i].id).select("id");
+        if (error) throw error;
+        if (!data || data.length===0) throw new Error('Supabase no dejó reordenar (revisá el permiso de UPDATE para "item_images").');
+        list[i].order = i;
+      }
+    }
+  }catch(e){
+    alert("No se pudo reordenar: "+e.message);
+    await loadCalendar(); render();
+  }
 }
 function renderCalendarTab(){
   const y = state.month.getFullYear(), m = state.month.getMonth();
@@ -538,7 +575,7 @@ function productionBlockHTML(it, opts){
         ${it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" data-action="img-zoom" data-url="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;cursor:zoom-in;">`}
         ${isAgency()?`<button data-action="item-media-clear" data-id="${it.id}" data-which="feed" title="Borrar imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
       </div>` : ""}
-      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);"><img src="${esc(im.image_url||'')}" data-action="img-zoom" data-url="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>${isAgency()?`<button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>`:""}</div>`).join("")}</div>`:""}` : ""}
+      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div class="img-thumb"${isAgency()?` draggable="true" data-drag-img-id="${im.id}" data-drag-item-id="${it.id}" data-drop-img-id="${im.id}" data-drop-item-id="${it.id}"`:""} style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);${isAgency()?'cursor:grab;':''}"><img src="${esc(im.image_url||'')}" data-action="img-zoom" data-url="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>${isAgency()?`<button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>`:""}</div>`).join("")}</div>`:""}` : ""}
       ${it.final_copy ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : ""}
       ${it.story_media_url ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Historia</div>
       <div style="position:relative;margin-bottom:8px;">
@@ -565,11 +602,12 @@ function productionBlockHTML(it, opts){
       <div class="field-label">Ya cargado</div>
       <div class="row-gap" style="flex-wrap:wrap;">
         ${it.media_url?`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">${it.media_type==="video"?`<video src="${esc(it.media_url)}" style="width:100%;height:100%;object-fit:cover;"></video>`:`<img src="${esc(it.media_url)}" style="width:100%;height:100%;object-fit:cover;">`}<span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">1</span></div>`:""}
-        ${extra.map((im,i)=>`<div style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);">
+        ${extra.map((im,i)=>`<div class="img-thumb" draggable="true" data-drag-img-id="${im.id}" data-drag-item-id="${it.id}" data-drop-img-id="${im.id}" data-drop-item-id="${it.id}" style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);cursor:grab;">
             <img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;">
             <span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>
             <button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>
           </div>`).join("")}
+        ${extra.length>1?`<div style="width:100%;font-size:11px;color:var(--fg-faint);margin-top:2px;">Arrastrá las fotos para cambiar el orden del carrusel.</div>`:""}
       </div>
     </div>`:""}
     <div class="field"><div class="field-label">Archivo${(it.media_url||extra.length)?' nuevo (opcional) — reemplaza la portada y suma al carrusel':' (imagen o video) — para un carrusel, seleccioná varias juntas'}</div>
@@ -1377,6 +1415,7 @@ document.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const a = el.dataset.action;
+  try{
   if (a === "overlay-close"){ if (e.target === el) closeSheet(); return; }
   if (a === "sheet-close"){ closeSheet(); return; }
   if (a === "identity-role"){ state.identityRole = el.dataset.role; state.sheetMsg=""; render(); return; }
@@ -1438,6 +1477,7 @@ document.addEventListener("click", async (e) => {
   if (a === "trash-purge"){ await trashPurge(el.dataset.table, el.dataset.id); return; }
   if (a === "open-addclient"){ openSheet("addClient"); return; }
   if (a === "addclient-save"){ await addClientSave(); return; }
+  }catch(err){ alert("No se pudo completar la acción: "+err.message); }
 });
 document.addEventListener("change", async (e) => {
   const el = e.target.closest("[data-action]");
@@ -1448,12 +1488,21 @@ document.addEventListener("change", async (e) => {
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sheet) closeSheet(); });
 document.addEventListener("dragstart", (e) => {
+  const imgEl = e.target.closest("[data-drag-img-id]");
+  if (imgEl){
+    e.dataTransfer.setData("application/x-img-id", imgEl.dataset.dragImgId);
+    e.dataTransfer.setData("application/x-item-id", imgEl.dataset.dragItemId);
+    e.dataTransfer.effectAllowed = "move";
+    return;
+  }
   const el = e.target.closest("[data-drag-id]");
   if (!el) return;
   e.dataTransfer.setData("text/plain", el.dataset.dragId);
   e.dataTransfer.effectAllowed = "move";
 });
 document.addEventListener("dragover", (e) => {
+  const imgEl = e.target.closest("[data-drop-img-id]");
+  if (imgEl){ e.preventDefault(); e.dataTransfer.dropEffect = "move"; imgEl.classList.add("img-drop-hover"); return; }
   const cell = e.target.closest(".day-cell[data-drop-date]");
   if (!cell) return;
   e.preventDefault();
@@ -1461,10 +1510,21 @@ document.addEventListener("dragover", (e) => {
   cell.classList.add("drop-hover");
 });
 document.addEventListener("dragleave", (e) => {
+  const imgEl = e.target.closest("[data-drop-img-id]");
+  if (imgEl) imgEl.classList.remove("img-drop-hover");
   const cell = e.target.closest(".day-cell[data-drop-date]");
   if (cell) cell.classList.remove("drop-hover");
 });
 document.addEventListener("drop", async (e) => {
+  const imgEl = e.target.closest("[data-drop-img-id]");
+  if (imgEl){
+    e.preventDefault();
+    imgEl.classList.remove("img-drop-hover");
+    const draggedId = e.dataTransfer.getData("application/x-img-id");
+    const itemId = e.dataTransfer.getData("application/x-item-id");
+    if (draggedId && itemId) await reorderItemImage(itemId, draggedId, imgEl.dataset.dropImgId);
+    return;
+  }
   const cell = e.target.closest(".day-cell[data-drop-date]");
   if (!cell) return;
   e.preventDefault();
