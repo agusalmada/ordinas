@@ -319,6 +319,8 @@ function siblingClients(){
 /* ===================== RENDER ROOT ===================== */
 function render(){
   const app = qs("app");
+  const prevSheetEl = app.querySelector(".sheet");
+  const prevSheetScroll = prevSheetEl ? prevSheetEl.scrollTop : null;
   let html = "";
   if (state.loading){
     html = `<div class="center-screen"><div class="loading-text">Cargando…</div></div>`;
@@ -328,6 +330,10 @@ function render(){
     html = renderShell();
   }
   app.innerHTML = html + (state.sheet ? renderSheetOverlay() : "") + (state.zoomImageUrl ? `<div class="story-zoom-overlay" data-action="img-zoom-close"><img src="${esc(state.zoomImageUrl)}"></div>` : "");
+  if (prevSheetScroll !== null){
+    const newSheetEl = app.querySelector(".sheet");
+    if (newSheetEl) newSheetEl.scrollTop = prevSheetScroll;
+  }
   attachDynamicListeners();
 }
 
