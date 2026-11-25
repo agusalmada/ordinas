@@ -265,6 +265,7 @@ const state = {
   sheetMsg: "",
   sheetErr: false,
   sheetBusy: false,
+  prodSlideIdx: {},
 };
 const channels = {};
 function removeChannel(key){ if(channels[key]){ sb.removeChannel(channels[key]); delete channels[key]; } }
@@ -570,16 +571,24 @@ function productionBlockHTML(it, opts){
         <div class="field-label" style="margin-bottom:0;">Producción</div>
         <span class="badge ${stage.badgeClass}">${stage.label}</span>
       </div>
-      ${it.media_url || extra.length ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Feed</div>
-      ${it.media_url ? `<div style="position:relative;margin-bottom:8px;">
-        ${it.media_type==="video" ? `<video src="${esc(it.media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>` : `<img src="${esc(it.media_url)}" data-action="img-zoom" data-url="${esc(it.media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;cursor:zoom-in;">`}
-        ${isAgency()?`<button data-action="item-media-clear" data-id="${it.id}" data-which="feed" title="Borrar imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
-      </div>` : ""}
-      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div class="img-thumb"${isAgency()?` draggable="true" data-drag-img-id="${im.id}" data-drag-item-id="${it.id}" data-drop-img-id="${im.id}" data-drop-item-id="${it.id}"`:""} style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);${isAgency()?'cursor:grab;':''}"><img src="${esc(im.image_url||'')}" data-action="img-zoom" data-url="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>${isAgency()?`<button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>`:""}</div>`).join("")}</div>`:""}` : ""}
+      ${it.media_url || extra.length ? (() => {
+        const slides = (it.media_url ? [{url:it.media_url, type:it.media_type, imgId:null}] : []).concat(extra.map(im=>({url:im.image_url, type:"image", imgId:im.id})));
+        const sIdx = Math.max(0, Math.min(state.prodSlideIdx[it.id]||0, slides.length-1));
+        const cur = slides[sIdx];
+        return `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Feed${slides.length>1?` · ${sIdx+1}/${slides.length}`:""}</div>
+      <div style="position:relative;margin-bottom:8px;">
+        ${cur.type==="video" ? `<video src="${esc(cur.url)}" controls style="width:100%;border-radius:10px;max-height:480px;"></video>` : `<img src="${esc(cur.url)}" data-action="img-zoom" data-url="${esc(cur.url)}" style="width:100%;border-radius:10px;max-height:480px;object-fit:contain;display:block;cursor:zoom-in;">`}
+        ${slides.length>1?`<button data-action="prod-slide-prev" data-id="${it.id}" data-max="${slides.length-1}" title="Anterior" style="position:absolute;top:0;left:0;width:36px;height:100%;background:none;border:none;cursor:pointer;"></button>
+        <button data-action="prod-slide-next" data-id="${it.id}" data-max="${slides.length-1}" title="Siguiente" style="position:absolute;top:0;right:0;width:36px;height:100%;background:none;border:none;cursor:pointer;"></button>`:""}
+        ${isAgency()?`<button data-action="${cur.imgId?'item-image-delete':'item-media-clear'}" data-id="${cur.imgId||it.id}" data-which="feed" title="Borrar esta imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
+      </div>
+      ${slides.length>1?`<div class="story-progress" style="margin-bottom:8px;">${slides.map((_,i)=>`<span class="${i<=sIdx?'on':''}"></span>`).join("")}</div>`:""}
+      ${extra.length ? `<div class="row-gap" style="margin-bottom:8px;flex-wrap:wrap;">${extra.map((im,i)=>`<div class="img-thumb" data-action="prod-slide-select" data-id="${it.id}" data-idx="${i+1}"${isAgency()?` draggable="true" data-drag-img-id="${im.id}" data-drag-item-id="${it.id}" data-drop-img-id="${im.id}" data-drop-item-id="${it.id}"`:""} style="position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-3);cursor:pointer;${i+1===sIdx?'outline:2px solid var(--accent-strong);outline-offset:-2px;':''}${isAgency()?'cursor:grab;':''}"><img src="${esc(im.image_url||'')}" style="width:100%;height:100%;object-fit:cover;"><span style="position:absolute;bottom:2px;left:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);border-radius:4px;padding:0 4px;">${i+2}</span>${isAgency()?`<button data-action="item-image-delete" data-id="${im.id}" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;border:none;font-size:11px;line-height:18px;">×</button>`:""}</div>`).join("")}</div>`:""}`;
+      })() : ""}
       ${it.final_copy ? `<div style="font-size:13px;color:var(--fg-dim);white-space:pre-wrap;margin-bottom:8px;">${esc(it.final_copy)}</div>` : ""}
       ${it.story_media_url ? `<div style="font-weight:600;font-size:12px;color:var(--fg-dim);margin-bottom:6px;">Historia</div>
       <div style="position:relative;margin-bottom:8px;">
-        ${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;max-height:280px;"></video>`:`<img src="${esc(it.story_media_url)}" data-action="img-zoom" data-url="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;max-height:280px;object-fit:cover;cursor:zoom-in;">`}
+        ${it.story_media_type==="video"?`<video src="${esc(it.story_media_url)}" controls style="width:100%;border-radius:10px;max-height:480px;"></video>`:`<img src="${esc(it.story_media_url)}" data-action="img-zoom" data-url="${esc(it.story_media_url)}" style="width:100%;border-radius:10px;max-height:480px;object-fit:contain;display:block;cursor:zoom-in;">`}
         ${isAgency()?`<button data-action="item-media-clear" data-id="${it.id}" data-which="story" title="Borrar imagen" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:22px;cursor:pointer;">×</button>`:""}
       </div>`:""}
       ${isAgency()?`<button class="btn btn-sm btn-ghost" data-action="item-prod-edit" data-id="${it.id}">Editar producción</button>`:""}
@@ -1460,6 +1469,9 @@ document.addEventListener("click", async (e) => {
   if (a === "item-image-add"){ await addItemImages(el.dataset.id); return; }
   if (a === "item-image-delete"){ await deleteItemImage(el.dataset.id); return; }
   if (a === "item-media-clear"){ await clearItemMedia(el.dataset.id, el.dataset.which); return; }
+  if (a === "prod-slide-prev"){ const id=el.dataset.id; const max=parseInt(el.dataset.max); const cur=state.prodSlideIdx[id]||0; state.prodSlideIdx[id] = cur<=0 ? max : cur-1; render(); return; }
+  if (a === "prod-slide-next"){ const id=el.dataset.id; const max=parseInt(el.dataset.max); const cur=state.prodSlideIdx[id]||0; state.prodSlideIdx[id] = cur>=max ? 0 : cur+1; render(); return; }
+  if (a === "prod-slide-select"){ state.prodSlideIdx[el.dataset.id] = parseInt(el.dataset.idx); render(); return; }
   if (a === "brand-delete"){ await brandDelete(el.dataset.id); return; }
   if (a === "ads-platform"){ state.adsPlatform = el.dataset.platform; render(); return; }
   if (a === "campaign-new"){ openSheet("campaignEdit", {id:null, platform: state.adsPlatform}); return; }
